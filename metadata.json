@@ -1,0 +1,9 @@
+{
+  "name": "EV-Care Pro ERP",
+  "description": "Enterprise-grade Multi-Tenant ERP for Electric Motorcycle Service Centers, including Inventory, CRM, Work Orders, and Billing.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
