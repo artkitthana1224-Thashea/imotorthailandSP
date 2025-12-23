@@ -18,6 +18,12 @@ export enum WorkOrderStatus {
   CANCELLED = 'CANCELLED'
 }
 
+export interface RepairService {
+  id: string;
+  name: string;
+  basePrice: number;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -25,7 +31,6 @@ export interface Company {
   taxId: string;
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
   vatRate: number;
-  // Added missing address property
   address: string;
 }
 
@@ -44,6 +49,7 @@ export interface Customer {
   name: string;
   phone: string;
   email: string;
+  province: string;
   type: 'INDIVIDUAL' | 'FLEET';
   loyaltyPoints: number;
 }

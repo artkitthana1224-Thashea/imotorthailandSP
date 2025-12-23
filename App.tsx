@@ -15,7 +15,7 @@ import { WorkOrder, Customer, Part } from './types';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [currentCompany] = useState(MOCK_COMPANIES[0]);
+  const [currentCompany, setCurrentCompany] = useState(MOCK_COMPANIES[0]);
   const [currentUser, setCurrentUser] = useState(MOCK_USERS[0]);
   const [notifications, setNotifications] = useState<any[]>([]);
   
@@ -44,15 +44,15 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard setActiveTab={setActiveTab} />;
       case 'service': return <WorkOrderView workOrders={workOrders} setWorkOrders={setWorkOrders} vehicles={vehicles} />;
       case 'inventory': return <InventoryView parts={parts} setParts={setParts} />;
       case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} />;
       case 'vehicles': return <VehicleView vehicles={vehicles} setVehicles={setVehicles} workOrders={workOrders} />;
-      case 'billing': return <BillingView />;
+      case 'billing': return <BillingView currentCompany={currentCompany} />;
       case 'reports': return <ReportsView />;
-      case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} />;
-      default: return <Dashboard />;
+      case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
+      default: return <Dashboard setActiveTab={setActiveTab} />;
     }
   };
 
@@ -63,6 +63,7 @@ const App: React.FC = () => {
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
           currentUser={currentUser} 
+          setCurrentUser={setCurrentUser}
           currentCompany={currentCompany}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
