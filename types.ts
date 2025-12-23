@@ -5,7 +5,9 @@ export enum UserRole {
   INVENTORY = 'INVENTORY',
   SALES = 'SALES',
   ACCOUNTING = 'ACCOUNTING',
-  MANAGER = 'MANAGER'
+  MANAGER = 'MANAGER',
+  SUPERVISOR = 'SUPERVISOR',
+  OWNER = 'OWNER'
 }
 
 export enum WorkOrderStatus {
@@ -18,25 +20,20 @@ export enum WorkOrderStatus {
   CANCELLED = 'CANCELLED'
 }
 
-export interface RepairService {
-  id: string;
-  name: string;
-  basePrice: number;
-}
-
 export interface Company {
-  id: string;
+  id: string; // Numeric ID String
   name: string;
   logo: string;
-  taxId: string;
+  tax_id: string;
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
-  vatRate: number;
+  vat_rate: number;
   address: string;
+  branch_name: string;
 }
 
 export interface User {
-  id: string;
-  companyId: string;
+  id: string; // Numeric ID String
+  company_id: string;
   name: string;
   email: string;
   role: UserRole;
@@ -44,52 +41,62 @@ export interface User {
 }
 
 export interface Customer {
-  id: string;
-  companyId: string;
+  id: string; // Numeric ID String
+  company_id: string;
   name: string;
   phone: string;
   email: string;
   province: string;
+  address: string;
   type: 'INDIVIDUAL' | 'FLEET';
-  loyaltyPoints: number;
+  loyalty_points: number;
 }
 
 export interface Vehicle {
-  id: string;
-  customerId: string;
+  id: string; // Numeric ID String
+  customer_id: string;
   brand: string;
   model: string;
   vin: string;
-  batteryType: string;
-  motorPower: string;
-  warrantyUntil: string;
+  battery_type: string;
+  motor_power: string;
+  warranty_until: string;
+  qr_code?: string;
 }
 
 export interface Part {
-  id: string;
-  companyId: string;
+  id: string; // Numeric ID String
+  company_id: string;
   sku: string;
   name: string;
   category: string;
-  costPrice: number;
-  salePrice: number;
-  stockLevel: number;
-  minStock: number;
+  cost_price: number;
+  sale_price: number;
+  stock_level: number;
+  min_stock: number;
   image?: string;
 }
 
 export interface WorkOrder {
-  id: string;
+  id: string; // Numeric ID String
   orderNumber: string;
-  companyId: string;
-  vehicleId: string;
-  customerId: string;
+  company_id: string;
+  vehicle_id: string;
+  customer_id: string;
   status: WorkOrderStatus;
-  issueDescription: string;
-  mechanicId?: string;
-  partsUsed: { partId: string; quantity: number; price: number }[];
-  laborCost: number;
-  createdAt: string;
-  updatedAt: string;
-  totalAmount: number;
+  issue_description: string;
+  mechanic_id?: string;
+  parts_used: { partId: string; quantity: number; price: number; name?: string }[];
+  labor_cost: number;
+  created_at: string;
+  updated_at: string;
+  total_amount: number;
+  is_claim: boolean;
+  photos: { before: string[]; after: string[] };
+}
+
+export interface RepairService {
+  id: string;
+  name: string;
+  basePrice: number;
 }

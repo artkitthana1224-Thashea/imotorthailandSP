@@ -1,29 +1,10 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  LayoutDashboard, 
-  Users, 
-  Bike, 
-  Package, 
-  Wrench, 
-  FileText, 
-  BarChart3, 
-  Bell, 
-  Settings, 
-  Menu, 
-  X,
-  Search,
-  MapPin,
-  Sun,
-  Moon,
-  Wallet,
-  ShieldCheck,
-  User,
-  LogOut,
-  Camera,
-  Save
+  LayoutDashboard, Users, Bike, Package, Wrench, BarChart3, Settings, 
+  Search, Sun, Moon, Wallet, X, Menu, ShieldCheck
 } from 'lucide-react';
-import { Company } from '../types';
+import { Company, UserRole } from '../types';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -37,17 +18,16 @@ interface SidebarItemProps {
 const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, active, onClick, isCollapsed, colorClass }) => (
   <button
     onClick={onClick}
-    className={`flex items-center w-full p-4 my-1.5 rounded-2xl transition-all duration-500 group ${
+    className={`flex items-center w-full p-4 my-1 rounded-2xl transition-all duration-300 group ${
       active 
-        ? 'bg-white/80 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xl shadow-blue-100/50 dark:shadow-blue-900/20 ring-1 ring-blue-100/50 dark:ring-blue-900/30' 
-        : 'text-slate-500 hover:bg-white/40 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+        ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-lg scale-[1.02]' 
+        : 'text-slate-400 hover:bg-white/40 dark:hover:bg-slate-800/60 hover:text-slate-900'
     }`}
   >
     <span className={`flex-shrink-0 transition-all duration-300 ${active ? 'scale-110 ' + colorClass : 'group-hover:scale-110 ' + colorClass}`}>
       {icon}
     </span>
-    {!isCollapsed && <span className="ml-4 font-bold text-sm lg:text-base whitespace-nowrap tracking-tight">{label}</span>}
-    {active && !isCollapsed && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></div>}
+    {!isCollapsed && <span className="ml-4 text-[11px] uppercase tracking-widest whitespace-nowrap">{label}</span>}
   </button>
 );
 
@@ -60,8 +40,6 @@ interface LayoutProps {
   currentCompany: Company;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
-  notifications: any[];
-  setNotifications: (n: any[]) => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ 
@@ -73,66 +51,46 @@ export const Layout: React.FC<LayoutProps> = ({
   currentCompany, 
   isDarkMode, 
   toggleDarkMode,
-  notifications,
-  setNotifications
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [editingUser, setEditingUser] = useState(currentUser);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isMobileNavVisible, setIsMobileNavVisible] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setIsMobileNavVisible(false);
+      } else {
+        setIsMobileNavVisible(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const menuItems = [
-    { id: 'dashboard', label: 'หน้าหลัก', icon: <LayoutDashboard size={22} />, colorClass: 'text-blue-500' },
-    { id: 'service', label: 'งานซ่อมบำรุง', icon: <Wrench size={22} />, colorClass: 'text-indigo-500' },
-    { id: 'inventory', label: 'คลังอะไหล่', icon: <Package size={22} />, colorClass: 'text-orange-500' },
-    { id: 'customers', label: 'ข้อมูลลูกค้า', icon: <Users size={22} />, colorClass: 'text-emerald-500' },
-    { id: 'vehicles', label: 'ฐานข้อมูลรถ', icon: <Bike size={22} />, colorClass: 'text-rose-500' },
-    { id: 'billing', label: 'ระบบการเงิน', icon: <Wallet size={22} />, colorClass: 'text-sky-500' },
-    { id: 'reports', label: 'รายงานสรุป', icon: <BarChart3 size={22} />, colorClass: 'text-purple-500' },
-    { id: 'settings', label: 'ตั้งค่าระบบ', icon: <Settings size={22} />, colorClass: 'text-slate-500' },
+    { id: 'dashboard', label: 'หน้าหลัก', icon: <LayoutDashboard size={18} />, color: 'text-blue-500' },
+    { id: 'service', label: 'งานซ่อม', icon: <Wrench size={18} />, color: 'text-indigo-500' },
+    { id: 'inventory', label: 'คลังอะไหล่', icon: <Package size={18} />, color: 'text-orange-500' },
+    { id: 'customers', label: 'ลูกค้า', icon: <Users size={18} />, color: 'text-teal-500' },
+    { id: 'vehicles', label: 'รถ EV', icon: <Bike size={18} />, color: 'text-rose-500' },
+    { id: 'billing', label: 'การเงิน', icon: <Wallet size={18} />, color: 'text-sky-500' },
+    { id: 'reports', label: 'วิเคราะห์', icon: <BarChart3 size={18} />, color: 'text-purple-500' },
+    { id: 'settings', label: 'ตั้งค่า', icon: <Settings size={18} />, color: 'text-slate-500' },
   ];
 
-  const handleUpdateProfile = () => {
-    setCurrentUser(editingUser);
-    setShowProfileModal(false);
-    alert('อัปเดตข้อมูลส่วนตัวเรียบร้อยแล้ว');
-  };
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingUser({ ...editingUser, avatar: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#f0f9ff] via-[#ffffff] to-[#f0fdf4] dark:from-[#0B1120] dark:via-[#0F172A] dark:to-[#0B1120] transition-colors duration-700">
-      {/* Sidebar */}
-      <aside className={`hidden md:flex flex-col bg-white/40 dark:bg-slate-900/60 backdrop-blur-3xl border-r border-white dark:border-slate-800 transition-all duration-700 ${isSidebarOpen ? 'w-80' : 'w-24'}`}>
-        <div className="flex flex-col items-center justify-center h-48 px-8">
-          <div className="w-24 h-24 rounded-full bg-white shadow-2xl flex items-center justify-center border-4 border-white ring-8 ring-blue-50 dark:ring-slate-800 overflow-hidden relative group">
-             <img 
-               src={currentCompany.logo} 
-               alt="Logo" 
-               className="w-[85%] h-auto object-contain transition-transform group-hover:scale-110 duration-700"
-               onError={(e) => {
-                 (e.target as HTMLImageElement).src = 'https://i-motor-thailand.com/wp-content/uploads/2022/03/logo-i-motor.png';
-               }}
-             />
+    <div className={`flex h-screen overflow-hidden ${isDarkMode ? 'dark bg-slate-950' : 'bg-slate-50'}`}>
+      {/* Desktop Sidebar */}
+      <aside className={`hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ${isSidebarOpen ? 'w-72' : 'w-24'}`}>
+        <div className="flex flex-col items-center justify-center h-40 border-b border-slate-50 dark:border-slate-800">
+          <div className="w-16 h-16 rounded-2xl bg-white shadow-md flex items-center justify-center overflow-hidden p-1">
+             <img src={currentCompany.logo} alt="Logo" className="w-full h-full object-contain" />
           </div>
-          {isSidebarOpen && (
-            <div className="mt-4 text-center">
-               <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic">I-MOTOR</h1>
-               <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 tracking-widest bg-white/80 dark:bg-slate-800/80 px-4 py-1.5 rounded-full mt-1.5 shadow-sm uppercase">Smart ERP System</p>
-            </div>
-          )}
         </div>
-
-        <nav className="flex-1 px-5 py-6 overflow-y-auto scrollbar-hide space-y-1">
+        <nav className="flex-1 px-4 py-4 overflow-y-auto scrollbar-hide">
           {menuItems.map((item) => (
             <SidebarItem
               key={item.id}
@@ -141,101 +99,51 @@ export const Layout: React.FC<LayoutProps> = ({
               active={activeTab === item.id}
               onClick={() => setActiveTab(item.id)}
               isCollapsed={!isSidebarOpen}
-              colorClass={item.colorClass}
+              colorClass={item.color}
             />
           ))}
         </nav>
-
-        <div className="p-8 space-y-4">
-          <button onClick={toggleDarkMode} className="flex items-center justify-center w-full h-14 bg-white/60 dark:bg-slate-800/30 rounded-2xl border border-white text-blue-500 transition-all shadow-sm">
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+        <div className="p-6">
+          <button onClick={toggleDarkMode} className="flex items-center justify-center w-full h-11 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400">
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
       </aside>
 
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        <header className="h-24 bg-white/30 dark:bg-slate-900/60 backdrop-blur-2xl border-b border-white dark:border-slate-800 px-6 md:px-12 flex items-center justify-between z-10">
-          <div className="flex items-center gap-6">
-             <div className="w-14 h-14 rounded-[22px] bg-white flex items-center justify-center p-2 shadow-xl border-4 border-white ring-4 ring-blue-50/50 overflow-hidden cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-                <img src={currentCompany.logo} className="w-full h-full object-contain" alt="I-Motor" />
-             </div>
-             <div className="relative hidden lg:block w-[400px]">
-              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input type="text" placeholder="ค้นหาข้อมูล..." className="w-full pl-14 pr-6 py-4 bg-white/80 dark:bg-slate-800/60 border-none rounded-[24px] text-sm font-bold shadow-sm" />
-            </div>
-          </div>
-
+        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 md:px-10 flex items-center justify-between z-10">
           <div className="flex items-center gap-4">
-            <button className="p-4 bg-white/80 dark:bg-slate-800/50 rounded-2xl border border-white relative transition-all shadow-sm">
-              <Bell size={22} className="text-slate-500" />
-              {notifications.length > 0 && <span className="absolute top-3.5 right-3.5 w-2.5 h-2.5 bg-rose-500 border-2 border-white rounded-full"></span>}
-            </button>
-            
-            <div onClick={() => { setEditingUser(currentUser); setShowProfileModal(true); }} className="flex items-center gap-4 cursor-pointer p-1.5 pr-5 bg-white/60 dark:bg-slate-800/30 rounded-[28px] border border-white shadow-sm hover:bg-white group">
-              <img src={currentUser.avatar} alt="User" className="w-10 h-10 rounded-2xl object-cover shadow-inner group-hover:scale-110 transition-transform" />
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-black text-slate-900 dark:text-white leading-none mb-1">{currentUser.name.split(' ')[0]}</p>
-                <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{currentUser.role}</p>
-              </div>
-            </div>
+             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 hidden md:block">
+               <Menu size={20} />
+             </button>
+             <h2 className="text-sm font-black uppercase italic tracking-tighter text-slate-400">
+                {menuItems.find(m => m.id === activeTab)?.label}
+             </h2>
+          </div>
+          <div className="flex items-center gap-4">
+             <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-900 dark:text-white uppercase">{currentUser.name}</p>
+                <p className="text-[7px] font-bold text-blue-500 uppercase">{currentUser.role}</p>
+             </div>
+             <div className="w-10 h-10 rounded-2xl overflow-hidden border-2 border-white shadow-sm">
+                <img src={currentUser.avatar} className="w-full h-full object-cover" />
+             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-5 md:p-8 lg:p-14 pb-40 md:pb-12 scroll-smooth">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 pb-32 scrollbar-hide">
           {children}
         </main>
 
-        {/* Mobile Navigation */}
-        <div className="md:hidden fixed bottom-6 left-4 right-4 h-24 bg-white/90 dark:bg-slate-900/95 backdrop-blur-3xl shadow-2xl rounded-[40px] flex items-center justify-around px-2 z-50 border border-white">
-          {[
-            { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: 'หน้าหลัก' },
-            { id: 'service', icon: <Wrench size={20} />, label: 'งานซ่อม' },
-            { id: 'inventory', icon: <Package size={20} />, label: 'คลัง' },
-            { id: 'customers', icon: <Users size={20} />, label: 'ลูกค้า' },
-            { id: 'billing', icon: <Wallet size={20} />, label: 'การเงิน' },
-            { id: 'settings', icon: <Settings size={20} />, label: 'ตั้งค่า' },
-          ].map((item) => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center justify-center flex-1 h-[80%] rounded-2xl transition-all ${activeTab === item.id ? 'text-blue-600' : 'text-slate-400'}`}>
-              <div className={`p-2.5 rounded-[18px] transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg scale-110' : ''}`}>{item.icon}</div>
-              <span className={`text-[9px] font-bold mt-2 whitespace-nowrap tracking-tight ${activeTab === item.id ? 'font-black' : 'opacity-70'}`}>{item.label}</span>
+        {/* Smart Mobile Nav */}
+        <div className={`md:hidden fixed bottom-6 left-6 right-6 h-16 bg-slate-900/95 backdrop-blur-xl shadow-2xl rounded-[28px] flex items-center justify-around px-4 z-50 border border-white/10 transition-all duration-500 ${isMobileNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}>
+          {menuItems.slice(0, 5).map((item) => (
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`p-3 rounded-2xl transition-all ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg scale-110' : 'text-slate-400'}`}>
+              {item.icon}
             </button>
           ))}
         </div>
       </div>
-
-      {/* Profile Modal */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[48px] shadow-2xl border border-white/20 animate-in zoom-in-95">
-            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">จัดการพนักงาน / โปรไฟล์</h3>
-               <button onClick={() => setShowProfileModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-all"><X size={20}/></button>
-            </div>
-            <div className="p-10 space-y-8 text-center">
-               <div className="flex justify-center">
-                  <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    <div className="w-32 h-32 rounded-[40px] overflow-hidden ring-8 ring-blue-50 dark:ring-slate-800 shadow-2xl transition-all group-hover:scale-105">
-                       <img src={editingUser.avatar} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-xl border-4 border-white transition-all"><Camera size={18} /></div>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarChange} />
-                  </div>
-               </div>
-               <div className="space-y-6">
-                  <div className="space-y-2 text-left">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ชื่อ-นามสกุล</label>
-                     <input type="text" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold dark:text-white shadow-inner" />
-                  </div>
-                  <div className="space-y-2 text-left">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">อีเมลงาน</label>
-                     <input type="email" value={editingUser.email} onChange={e => setEditingUser({...editingUser, email: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold dark:text-white shadow-inner" />
-                  </div>
-                  <button onClick={handleUpdateProfile} className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-3"><Save size={18}/> บันทึกการเปลี่ยนแปลง</button>
-               </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

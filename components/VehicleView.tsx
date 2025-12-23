@@ -1,22 +1,11 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Bike, 
-  ShieldCheck, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  X, 
-  Save, 
-  BatteryCharging,
-  Cpu,
-  History,
-  Camera,
-  Search,
-  ChevronRight,
-  ExternalLink
+  Bike, ShieldCheck, Plus, Trash2, Edit3, X, Save, BatteryCharging,
+  Cpu, History, Camera, Search, ChevronRight, ExternalLink
 } from 'lucide-react';
-import { Vehicle, WorkOrder, WorkOrderStatus } from '../types';
+import { Vehicle, WorkOrder, Customer } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 interface VehicleWithExtras extends Vehicle {
   color?: string;
@@ -35,44 +24,83 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
   const [historyModalVehicle, setHistoryModalVehicle] = useState<VehicleWithExtras | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<VehicleWithExtras | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Fixed property names to match snake_case interface
   const [formData, setFormData] = useState<Partial<VehicleWithExtras>>({
     brand: 'I-Motor',
     model: 'Vapor CBS',
     vin: '',
-    batteryType: 'Lithium 72V',
-    motorPower: '3000W',
+    customer_id: '',
+    battery_type: 'Lithium 72V',
+    motor_power: '3000W',
     color: 'Onyx Black',
     charger: '8A',
     image: '',
-    warrantyUntil: new Date(new Date().setFullYear(new Date().getFullYear() + 3)).toISOString().split('T')[0]
+    warranty_until: new Date(new Date().setFullYear(new Date().getFullYear() + 3)).toISOString().split('T')[0]
   });
 
-  const filteredVehicles = vehicles.filter(v => 
-    v.vin.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    v.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.color?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
-  const handleAddOrEdit = () => {
-    if (editingVehicle) {
-      setVehicles(prev => prev.map(v => v.id === editingVehicle.id ? { ...v, ...formData } as VehicleWithExtras : v));
-    } else {
-      const newVehicle: VehicleWithExtras = {
-        ...formData,
-        id: Math.random().toString(36).substr(2, 9),
-        customerId: 'cust1'
-      } as VehicleWithExtras;
-      setVehicles(prev => [...prev, newVehicle]);
+  const fetchCustomers = async () => {
+    const { data } = await supabase.from('customers').select('*').order('name');
+    if (data) setCustomers(data);
+  };
+
+  const fetchVehicles = async () => {
+    const { data } = await supabase.from('vehicles').select('*');
+    if (data) setVehicles(data);
+  };
+
+  const handleAddOrEdit = async () => {
+    // Fixed from customerId to customer_id
+    if (!formData.vin || !formData.customer_id) {
+      alert("กรุณากรอก VIN และเลือกลูกเจ้าของรถ");
+      return;
     }
-    closeModal();
+
+    const vehicleData = {
+      customer_id: formData.customer_id,
+      brand: formData.brand,
+      model: formData.model,
+      vin: formData.vin,
+      battery_type: formData.battery_type,
+      motor_power: formData.motor_power,
+      warranty_until: formData.warranty_until,
+      // mapping extra fields if needed or storing in a metadata column
+    };
+
+    const { error } = editingVehicle 
+      ? await supabase.from('vehicles').update(vehicleData).eq('id', editingVehicle.id)
+      : await supabase.from('vehicles').insert([vehicleData]);
+
+    if (error) {
+      alert("Error: " + error.message);
+    } else {
+      await fetchVehicles();
+      closeModal();
+    }
+  };
+
+  // Fixed: Implemented missing handleDeleteVehicle function to handle vehicle deletion from Supabase
+  const handleDeleteVehicle = async (id: string) => {
+    if (!confirm("ยืนยันการลบข้อมูลรถคันนี้?")) return;
+    const { error } = await supabase.from('vehicles').delete().eq('id', id);
+    if (!error) {
+      await fetchVehicles();
+    } else {
+      alert("Error deleting vehicle: " + error.message);
+    }
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingVehicle(null);
-    setFormData({ brand: 'I-Motor', model: 'Vapor CBS', vin: '', batteryType: 'Lithium 72V', motorPower: '3000W', color: 'Onyx Black', charger: '8A', image: '' });
+    // Fixed property names to match snake_case interface
+    setFormData({ brand: 'I-Motor', model: 'Vapor CBS', vin: '', customer_id: '', battery_type: 'Lithium 72V', motor_power: '3000W', color: 'Onyx Black', charger: '8A', image: '' });
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,9 +114,10 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
     }
   };
 
-  const getRepairHistory = (vehicleId: string) => {
-    return workOrders.filter(wo => wo.vehicleId === vehicleId);
-  };
+  const filteredVehicles = vehicles.filter(v => 
+    v.vin.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    v.model.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-24">
@@ -97,8 +126,8 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
           <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">
             ฐานข้อมูลรถ <span className="text-blue-600">Vehicles</span>
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">
-            จัดการทะเบียนรถมอเตอร์ไซค์ไฟฟ้าและตรวจสอบประวัติการรับบริการ
+          <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">
+            ทะเบียนรถไฟฟ้า I-MOTOR VAPOR (Supabase Synchronized)
           </p>
         </div>
         <button 
@@ -109,195 +138,103 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
         </button>
       </div>
 
-      {/* Filter & Search */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+      <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
            <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-           <input 
-            type="text" 
-            placeholder="ค้นหาตาม VIN, รุ่น หรือสี..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl font-bold text-sm outline-none dark:text-white"
-           />
-        </div>
-        <div className="flex gap-2 w-full md:w-auto">
-           <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center">
-             TOTAL: {vehicles.length} UNITS
-           </div>
+           <input type="text" placeholder="ค้นหาตาม VIN หรือรุ่นรถ..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-14 pr-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none" />
         </div>
       </div>
 
-      {/* Vehicle Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
            <table className="w-full text-left">
               <thead>
-                 <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">
-                    <th className="px-8 py-6">รูปรถ</th>
-                    <th className="px-8 py-6">รุ่น / สี</th>
+                 <tr className="bg-slate-50/50 text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">
+                    <th className="px-8 py-6">รูป / รุ่น</th>
                     <th className="px-8 py-6">หมายเลข VIN</th>
                     <th className="px-8 py-6">สเปกไฟฟ้า</th>
-                    <th className="px-8 py-6 text-center">ประวัติ</th>
-                    <th className="px-8 py-6 text-right">แอคชั่น</th>
+                    <th className="px-8 py-6">เจ้าของรถ</th>
+                    <th className="px-8 py-6 text-right">จัดการ</th>
                  </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                 {filteredVehicles.map((v) => (
-                    <tr key={v.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all group">
-                       <td className="px-8 py-6">
-                          <div className="w-16 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                             {v.image ? (
-                               <img src={v.image} className="w-full h-full object-cover" />
-                             ) : (
-                               <Bike size={20} className="text-slate-300" />
-                             )}
-                          </div>
-                       </td>
-                       <td className="px-8 py-6">
-                          <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{v.model}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                             <div className={`w-2.5 h-2.5 rounded-full ${
-                               v.color === 'Onyx Black' ? 'bg-zinc-900' : 
-                               v.color === 'Aero Blue' ? 'bg-blue-400' :
-                               v.color === 'Summer Orange' ? 'bg-orange-500' :
-                               v.color === 'Corsa Red' ? 'bg-red-600' :
-                               v.color === 'Party Yellow' ? 'bg-yellow-400' : 'bg-slate-200'
-                             }`}></div>
-                             <span className="text-[10px] font-bold text-slate-500">{v.color}</span>
-                          </div>
-                       </td>
-                       <td className="px-8 py-6">
-                          <span className="text-xs font-black font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg">{v.vin}</span>
-                       </td>
-                       <td className="px-8 py-6">
-                          <div className="flex items-center gap-3 text-slate-500">
-                             <Cpu size={14} className="text-indigo-500" />
-                             <span className="text-[10px] font-bold">{v.motorPower}</span>
-                             <BatteryCharging size={14} className="text-emerald-500 ml-2" />
-                             <span className="text-[10px] font-bold">{v.batteryType}</span>
-                          </div>
-                       </td>
-                       <td className="px-8 py-6 text-center">
-                          <button 
-                            onClick={() => setHistoryModalVehicle(v)}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-900 hover:text-white rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400"
-                          >
-                             <History size={14} /> {getRepairHistory(v.id).length} ครั้ง
-                          </button>
-                       </td>
-                       <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                             <button onClick={() => { setEditingVehicle(v); setFormData(v); setIsModalOpen(true); }} className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-600 rounded-xl transition-all"><Edit3 size={16}/></button>
-                             <button onClick={() => setVehicles(prev => prev.filter(item => item.id !== v.id))} className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-400 hover:text-rose-600 rounded-xl transition-all"><Trash2 size={16}/></button>
-                          </div>
-                       </td>
-                    </tr>
-                 ))}
+              <tbody className="divide-y divide-slate-50">
+                 {filteredVehicles.map((v) => {
+                    // Corrected from customerId to customer_id
+                    const owner = customers.find(c => c.id === v.customer_id);
+                    return (
+                      <tr key={v.id} className="hover:bg-blue-50/30 transition-all group">
+                         <td className="px-8 py-6">
+                            <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{v.model}</p>
+                            <p className="text-[10px] font-bold text-slate-400">{v.brand}</p>
+                         </td>
+                         <td className="px-8 py-6">
+                            <span className="text-xs font-black font-mono text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg">{v.vin}</span>
+                         </td>
+                         <td className="px-8 py-6">
+                            <div className="flex items-center gap-3 text-slate-500">
+                               <Cpu size={14} className="text-indigo-500" />
+                               {/* Fixed property names to match snake_case interface */}
+                               <span className="text-[10px] font-bold">{v.motor_power || '3000W'}</span>
+                               <BatteryCharging size={14} className="text-emerald-500 ml-2" />
+                               <span className="text-[10px] font-bold">{v.battery_type || '72V'}</span>
+                            </div>
+                         </td>
+                         <td className="px-8 py-6 font-black text-xs">{owner?.name || 'ไม่ระบุเจ้าของ'}</td>
+                         <td className="px-8 py-6 text-right space-x-2">
+                            <button onClick={() => { setEditingVehicle(v); setFormData(v); setIsModalOpen(true); }} className="p-3 text-slate-300 hover:text-blue-600"><Edit3 size={16}/></button>
+                            <button onClick={() => handleDeleteVehicle(v.id)} className="p-3 text-slate-200 hover:text-rose-600"><Trash2 size={16}/></button>
+                         </td>
+                      </tr>
+                    );
+                 })}
               </tbody>
            </table>
         </div>
       </div>
 
-      {/* History Modal */}
-      {historyModalVehicle && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-           <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-[48px] shadow-2xl overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
-              <div className="p-10 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                 <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-2xl shadow-blue-200"><History size={32} /></div>
-                    <div>
-                       <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">ประวัติงานซ่อม</h3>
-                       <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{historyModalVehicle.model} | {historyModalVehicle.vin}</p>
-                    </div>
-                 </div>
-                 <button onClick={() => setHistoryModalVehicle(null)} className="p-4 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all"><X size={24}/></button>
-              </div>
-              <div className="p-10 max-h-[60vh] overflow-y-auto space-y-6 scrollbar-hide">
-                 {getRepairHistory(historyModalVehicle.id).length === 0 ? (
-                    <div className="py-20 text-center text-slate-400 italic">ไม่พบประวัติงานซ่อมสำหรับรถคันนี้</div>
-                 ) : (
-                    <div className="grid grid-cols-1 gap-4">
-                       {getRepairHistory(historyModalVehicle.id).map(wo => (
-                          <div key={wo.id} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between hover:border-blue-200 transition-all">
-                             <div className="flex gap-6">
-                                <div className="text-center w-20">
-                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">DATE</p>
-                                   <p className="text-xs font-black text-slate-900 dark:text-white">{new Date(wo.createdAt).toLocaleDateString()}</p>
-                                </div>
-                                <div>
-                                   <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">JOB ID: {wo.orderNumber}</p>
-                                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{wo.issueDescription}</p>
-                                </div>
-                             </div>
-                             <div className="text-right">
-                                <p className="text-sm font-black text-slate-900 dark:text-white mb-2">฿{wo.totalAmount.toLocaleString()}</p>
-                                <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest">Completed</span>
-                             </div>
-                          </div>
-                       ))}
-                    </div>
-                 )}
-              </div>
-              <div className="p-10 bg-slate-50 dark:bg-slate-800/30 flex justify-end">
-                 <button onClick={() => setHistoryModalVehicle(null)} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest">ปิดหน้าต่าง</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* CRUD Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white/20 animate-in zoom-in-95 duration-500">
-            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">ลงทะเบียนข้อมูล VAPOR</h3>
-               <button onClick={closeModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><X size={20}/></button>
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white/20 animate-in zoom-in-95">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+               <h3 className="text-xl font-black uppercase italic tracking-tighter">ลงทะเบียนรถใหม่ <span className="text-blue-600">Vehicle Entry</span></h3>
+               <button onClick={closeModal} className="p-2 hover:bg-slate-200 rounded-xl transition-all"><X size={24}/></button>
             </div>
-            <div className="p-8 space-y-8">
-               <div className="flex justify-center">
-                  <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    <div className="w-48 h-32 rounded-3xl bg-slate-50 dark:bg-slate-800 overflow-hidden border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center transition-all group-hover:border-blue-400">
-                       {formData.image ? (
-                         <img src={formData.image} className="w-full h-full object-cover" />
-                       ) : (
-                         <div className="text-center text-slate-400">
-                            <Camera size={32} className="mx-auto mb-2 opacity-50" />
-                            <p className="text-[10px] font-bold uppercase tracking-widest">อัปโหลดรูป</p>
-                         </div>
-                       )}
-                    </div>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-                  </div>
-               </div>
-               <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">รุ่นรถ</label>
-                    <input type="text" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none font-bold dark:text-white outline-none" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">สีรถ</label>
-                    <input type="text" value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none font-bold dark:text-white outline-none" />
-                  </div>
-               </div>
+            <div className="p-10 space-y-6">
                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">หมายเลขตัวถัง (VIN)</label>
-                  <input type="text" value={formData.vin} onChange={e => setFormData({...formData, vin: e.target.value})} placeholder="IMT-XXXXXX" className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none font-bold dark:text-white outline-none ring-2 ring-transparent focus:ring-blue-500/20" />
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">เลือกเจ้าของรถ</label>
+                  {/* Corrected from customerId to customer_id */}
+                  <select value={formData.customer_id} onChange={e => setFormData({...formData, customer_id: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none">
+                     <option value="">-- กรุณาเลือกลูกค้า --</option>
+                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
+                  </select>
                </div>
                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">แบตเตอรี่</label>
-                    <input type="text" value={formData.batteryType} onChange={e => setFormData({...formData, batteryType: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none font-bold dark:text-white outline-none" />
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">รุ่นรถ</label>
+                    <input type="text" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ประกันถึงวันที่</label>
-                    <input type="date" value={formData.warrantyUntil} onChange={e => setFormData({...formData, warrantyUntil: e.target.value})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border-none font-bold dark:text-white outline-none" />
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">หมายเลขตัวถัง (VIN)</label>
+                    <input type="text" value={formData.vin} onChange={e => setFormData({...formData, vin: e.target.value})} placeholder="IMT-XXXXXX" className="w-full h-14 px-6 bg-blue-50/50 border border-blue-100 rounded-2xl font-black text-xs outline-none" />
+                  </div>
+               </div>
+               <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">สเปกแบตเตอรี่</label>
+                    {/* Corrected from batteryType to battery_type */}
+                    <input type="text" value={formData.battery_type} onChange={e => setFormData({...formData, battery_type: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">ประกันถึงวันที่</label>
+                    {/* Corrected from warrantyUntil to warranty_until */}
+                    <input type="date" value={formData.warranty_until} onChange={e => setFormData({...formData, warranty_until: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
                   </div>
                </div>
             </div>
-            <div className="p-8 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-4">
-               <button onClick={closeModal} className="px-6 py-3 text-slate-500 font-black uppercase text-[10px]">ยกเลิก</button>
-               <button onClick={handleAddOrEdit} className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-blue-200">บันทึกข้อมูลรถ</button>
+            <div className="p-8 bg-slate-50 flex justify-end gap-4">
+               <button onClick={handleAddOrEdit} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-3">
+                  <Save size={18}/> บันทึกข้อมูลรถไปยัง Database
+               </button>
             </div>
           </div>
         </div>

@@ -1,138 +1,116 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  TrendingUp, 
-  Wrench, 
-  AlertCircle, 
-  Users, 
-  Banknote, 
-  BatteryCharging,
-  ArrowUpRight,
-  ArrowDownRight,
-  Zap,
-  Globe,
-  Settings2,
-  Bike,
-  ShieldCheck,
-  Package,
-  CalendarCheck
+  Wrench, Users, Banknote, Package, ShieldCheck, Zap, Clock, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  AreaChart, 
-  Area 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
+import { supabase } from '../services/supabaseClient';
 
 interface DashboardProps {
   setActiveTab: (tab: string) => void;
 }
 
-const data = [
-  { name: 'จ.', income: 4500, repairs: 12 },
-  { name: 'อ.', income: 5200, repairs: 15 },
-  { name: 'พ.', income: 3800, repairs: 8 },
-  { name: 'พฤ.', income: 6500, repairs: 22 },
-  { name: 'ศ.', income: 4800, repairs: 14 },
-  { name: 'ส.', income: 7200, repairs: 25 },
-  { name: 'อา.', income: 2500, repairs: 5 },
-];
-
-const StatCard = ({ title, value, icon: Icon, trend, color, bgClass }: any) => (
-  <div className={`${bgClass} p-8 rounded-[40px] border border-white/50 shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden`}>
-    <div className="flex items-center justify-between mb-8 relative z-10">
-      <div className={`p-4 rounded-2xl bg-white/80 ${color} shadow-sm transition-transform group-hover:scale-110 duration-500`}>
-        <Icon size={24} />
-      </div>
-      {trend && (
-        <div className={`flex items-center gap-1 text-[11px] font-black px-3 py-1.5 rounded-full bg-white/60 ${trend > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-          {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {Math.abs(trend)}%
-        </div>
-      )}
-    </div>
-    <div className="relative z-10">
-      <h3 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1 opacity-70">{title}</h3>
-      <p className="text-3xl font-black text-slate-900 tracking-tighter">{value}</p>
-    </div>
-  </div>
-);
-
 export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
+  const [stats, setStats] = useState({
+    todayIncome: 0,
+    totalBills: 0,
+    newCustomers: 0,
+    inProgress: 0,
+    lowStock: 0,
+    completed: 0,
+    totalParts: 0
+  });
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      const { data: woData } = await supabase.from('work_orders').select('total_amount, status, created_at');
+      const { data: custData } = await supabase.from('customers').select('id');
+      const { data: partsData } = await supabase.from('parts').select('id, stock_level, min_stock');
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      const income = woData?.filter(w => w.created_at.startsWith(today)).reduce((sum, w) => sum + Number(w.total_amount), 0) || 0;
+      const inProgressCount = woData?.filter(w => w.status !== 'COMPLETED' && w.status !== 'CANCELLED').length || 0;
+      const completedCount = woData?.filter(w => w.status === 'COMPLETED').length || 0;
+      const lowStockCount = partsData?.filter(p => p.stock_level <= p.min_stock).length || 0;
+
+      setStats({
+        todayIncome: income,
+        totalBills: woData?.length || 0,
+        newCustomers: custData?.length || 0,
+        inProgress: inProgressCount,
+        lowStock: lowStockCount,
+        completed: completedCount,
+        totalParts: partsData?.length || 0
+      });
+    } catch (err) {
+      console.error("Dashboard stat fetch error:", err);
+    }
+  };
+
+  const StatCard = ({ title, value, icon: Icon, colorClass, bgClass }: any) => (
+    <div className={`${bgClass} border border-white/60 p-5 rounded-[32px] shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center group`}>
+      <div className={`p-3 rounded-2xl bg-white/80 ${colorClass} mb-3 group-hover:scale-110 transition-transform shadow-sm`}>
+        <Icon size={20} />
+      </div>
+      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 opacity-80">{title}</h3>
+      <p className="text-xl font-black text-slate-900 tracking-tight">{value}</p>
+    </div>
+  );
+
   return (
-    <div className="space-y-10 animate-in fade-in duration-1000">
-      {/* Row 1: Welcome & Main Stats */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <div className="xl:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[48px] text-white flex flex-col justify-between shadow-2xl">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="bg-blue-600 text-[10px] font-black uppercase px-3 py-1 rounded-full">สาขาสมุทรปราการ</span>
-              <ShieldCheck size={18} className="text-blue-400" />
+    <div className="space-y-6 animate-in fade-in duration-700">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <div className="xl:col-span-8 bg-gradient-to-br from-indigo-900 via-slate-900 to-blue-900 p-10 rounded-[48px] text-white flex flex-col justify-between shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="bg-blue-600/80 backdrop-blur-md text-[9px] font-black uppercase px-3 py-1 rounded-full border border-blue-400/20 tracking-widest">Enterprise Edition</span>
+              <ShieldCheck size={16} className="text-blue-400" />
             </div>
-            <h1 className="text-4xl font-black tracking-tighter mb-4">I-MOTOR <span className="text-blue-400">CENTRAL</span></h1>
-            <p className="text-slate-300 font-medium leading-relaxed max-w-sm">บริหารจัดการข้อมูลงานซ่อม คลังอะไหล่ และลูกค้าได้อย่างเรียลไทม์</p>
+            <h1 className="text-4xl font-black tracking-tighter mb-2 leading-none uppercase italic">I-MOTOR <span className="text-blue-400">CENTRAL ERP</span></h1>
+            <p className="text-slate-400 font-bold text-[11px] uppercase tracking-wider max-w-md leading-relaxed">ระบบบริหารจัดการศูนย์บริการอัจฉริยะ สำหรับรถมอเตอร์ไซค์ไฟฟ้า</p>
           </div>
-          <div className="mt-8 flex gap-4">
-             <button onClick={() => setActiveTab('service')} className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all">เปิดใบงานใหม่</button>
-             <button onClick={() => setActiveTab('settings')} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><Settings2 size={20}/></button>
-          </div>
-        </div>
-        <StatCard title="รายได้วันนี้" value="฿24,500" icon={Banknote} trend={14.8} color="text-blue-600" bgClass="bg-blue-50/50" />
-        <StatCard title="ลูกค้าใหม่เดือนนี้" value="124" icon={Users} trend={28.5} color="text-indigo-600" bgClass="bg-indigo-50/50" />
-      </div>
-
-      {/* Row 2: Operation Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="งานซ่อมที่กำลังทำ" value="18" icon={Wrench} color="text-orange-600" bgClass="bg-orange-50/50" />
-        <StatCard title="อะไหล่ที่ต้องเติม" value="5" icon={Package} color="text-rose-600" bgClass="bg-rose-50/50" />
-        <StatCard title="รถทั้งหมดในระบบ" value="542" icon={Bike} color="text-emerald-600" bgClass="bg-emerald-50/50" />
-        <StatCard title="เฉลี่ยงานซ่อม/วัน" value="12" icon={CalendarCheck} color="text-purple-600" bgClass="bg-purple-50/50" />
-      </div>
-
-      {/* Row 3: Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="bg-white/80 backdrop-blur-2xl p-10 rounded-[48px] border border-white shadow-xl">
-          <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div> แนวโน้มรายได้สัปดาห์นี้
-          </h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} />
-                <Area type="monotone" dataKey="income" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorIncome)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="mt-10 flex gap-4 relative z-10">
+             <button onClick={() => setActiveTab('service')} className="px-10 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl shadow-blue-900/30">เปิดใบงานซ่อม</button>
+             <button onClick={() => setActiveTab('inventory')} className="px-10 py-4 bg-white/10 hover:bg-white/20 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all backdrop-blur-sm border border-white/10">คลังอะไหล่</button>
           </div>
         </div>
+        
+        <div className="xl:col-span-4 grid grid-cols-2 gap-4">
+          <StatCard title="รายได้วันนี้" value={`฿${stats.todayIncome.toLocaleString()}`} icon={Banknote} colorClass="text-blue-600" bgClass="bg-blue-50" />
+          <StatCard title="บิลทั้งหมด" value={`${stats.totalBills} ใบ`} icon={Zap} colorClass="text-amber-600" bgClass="bg-amber-50" />
+          <StatCard title="ลูกค้าทั้งหมด" value={`${stats.newCustomers} คน`} icon={Users} colorClass="text-emerald-600" bgClass="bg-emerald-50" />
+          <StatCard title="กำลังซ่อม" value={`${stats.inProgress} งาน`} icon={Clock} colorClass="text-indigo-600" bgClass="bg-indigo-50" />
+        </div>
+      </div>
 
-        <div className="bg-white/80 backdrop-blur-2xl p-10 rounded-[48px] border border-white shadow-xl">
-          <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-emerald-600 rounded-full"></div> จำนวนงานซ่อมรายวัน
-          </h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 700}} />
-                <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} cursor={{fill: '#f8fafc'}} />
-                <Bar dataKey="repairs" fill="#10b981" radius={[10, 10, 10, 10]} barSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-rose-50 p-6 rounded-[32px] border border-white flex items-center gap-6 shadow-sm">
+          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-rose-500 shadow-sm"><AlertCircle size={28}/></div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">สต็อกต่ำ</p>
+            <p className="text-2xl font-black text-slate-900">{stats.lowStock} SKU</p>
+          </div>
+        </div>
+        <div className="bg-emerald-50 p-6 rounded-[32px] border border-white flex items-center gap-6 shadow-sm">
+          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-500 shadow-sm"><CheckCircle2 size={28}/></div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ซ่อมเสร็จแล้ว</p>
+            <p className="text-2xl font-black text-slate-900">{stats.completed} คัน</p>
+          </div>
+        </div>
+        <div className="bg-blue-50 p-6 rounded-[32px] border border-white flex items-center gap-6 shadow-sm">
+          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-blue-500 shadow-sm"><Package size={28}/></div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">อะไหล่ทั้งหมด</p>
+            <p className="text-2xl font-black text-slate-900">{stats.totalParts} SKU</p>
           </div>
         </div>
       </div>
