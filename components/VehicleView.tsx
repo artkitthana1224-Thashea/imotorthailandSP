@@ -4,7 +4,7 @@ import {
   Bike, ShieldCheck, Plus, Trash2, Edit3, X, Save, BatteryCharging,
   Cpu, History, Camera, Search, ChevronRight, ExternalLink
 } from 'lucide-react';
-import { Vehicle, WorkOrder, Customer } from '../types';
+import { Vehicle, WorkOrder, Customer, Company } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface VehicleWithExtras extends Vehicle {
@@ -13,13 +13,16 @@ interface VehicleWithExtras extends Vehicle {
   image?: string;
 }
 
+// Added currentCompany to VehicleViewProps to fix type error in App.tsx
 interface VehicleViewProps {
   vehicles: VehicleWithExtras[];
   setVehicles: React.Dispatch<React.SetStateAction<VehicleWithExtras[]>>;
   workOrders: WorkOrder[];
+  currentCompany: Company;
 }
 
-export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles, workOrders }) => {
+// Updated component signature to accept currentCompany
+export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles, workOrders, currentCompany }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyModalVehicle, setHistoryModalVehicle] = useState<VehicleWithExtras | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<VehicleWithExtras | null>(null);

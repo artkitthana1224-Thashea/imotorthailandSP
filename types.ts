@@ -88,6 +88,7 @@ export interface WorkOrder {
   mechanic_id?: string;
   parts_used: { partId: string; quantity: number; price: number; name?: string }[];
   labor_cost: number;
+  duration_hours?: number;
   created_at: string;
   updated_at: string;
   total_amount: number;

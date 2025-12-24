@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Save, Camera, X, RefreshCw, ShieldCheck, AlertCircle, FileCode, CheckCircle2, 
-  Settings as SettingsIcon, BellRing, User as UserIcon, LogOut, Link
+  Settings as SettingsIcon, BellRing, User as UserIcon, LogOut, Link, Copy, Database
 } from 'lucide-react';
 import { Company, User, UserRole } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -16,7 +16,6 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurrentUser, currentCompany, setCurrentCompany }) => {
   const [activeTab, setActiveTab] = useState<'PROFILE' | 'INTEGRATION' | 'HEALTH'>('PROFILE');
-  const [companyForm, setCompanyForm] = useState<Company>(currentCompany);
   const [userForm, setUserForm] = useState<User>(currentUser);
   const [lineConfig, setLineConfig] = useState({
     accessToken: '',
@@ -26,8 +25,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
   const [healthResults, setHealthResults] = useState<{table: string, status: 'ok'|'error', message: string}[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [fixSql, setFixSql] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const repairSql = `-- 🛠️ I-MOTOR SQL REPAIR SCRIPT 🛠️
+-- กรุณารันโค้ดทั้งหมดนี้ใน Supabase SQL Editor เพื่อแก้ไข Error และคอลัมน์ที่หายไป
+
+-- 1. เพิ่มคอลัมน์ updated_at ในตาราง users (หากไม่มี)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- 2. เพิ่มคอลัมน์ที่จำเป็นในตาราง work_orders (ซ่อมจุดที่ Error: duration_hours)
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS duration_hours NUMERIC DEFAULT 0;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS mechanic_id UUID REFERENCES users(id);
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS parts_used JSONB DEFAULT '[]';
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS vehicle_id UUID REFERENCES vehicles(id);
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS order_number TEXT;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS labor_cost NUMERIC DEFAULT 0;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS total_amount NUMERIC DEFAULT 0;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS issue_description TEXT;
+ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDING';
+
+-- 3. ตรวจสอบตารางอื่นๆ
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE parts ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+
+-- 4. รีเฟรช Schema Cache (สำคัญมากเพื่อให้ระบบมองเห็นคอลัมน์ใหม่ทันที)
+NOTIFY pgrst, 'reload schema';`;
 
   useEffect(() => {
     if (activeTab === 'INTEGRATION') {
@@ -71,11 +95,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
     }
   };
 
+  const getErrorString = (err: any) => {
+    if (!err) return "Unknown Error";
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (err.details) return err.details;
+    try {
+      return JSON.stringify(err, null, 2);
+    } catch (e) {
+      return String(err);
+    }
+  };
+
   const saveUserProfile = async () => {
     setIsSaving(true);
     try {
-      // In a real production environment, we'd upload to Supabase Storage first.
-      // For this implementation, we store the base64/URL directly in the avatar column.
       const { error } = await supabase.from('users').update({
         name: userForm.name,
         avatar: userForm.avatar,
@@ -83,13 +117,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
       }).eq('id', currentUser.id);
 
       if (error) {
-        alert("Error saving profile: " + error.message);
+        alert("Error saving profile: " + getErrorString(error));
       } else {
         setCurrentUser(userForm);
         alert("อัปเดตโปรไฟล์และบันทึกรูปภาพสำเร็จ");
       }
-    } catch (err) {
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } catch (err: any) {
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + getErrorString(err));
     } finally {
       setIsSaving(false);
     }
@@ -101,10 +135,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
     const tables = ['companies', 'users', 'customers', 'vehicles', 'parts', 'work_orders', 'system_config'];
     for (const table of tables) {
       const { error } = await supabase.from(table).select('*').limit(1);
-      results.push({ table, status: error ? 'error' : 'ok', message: error ? error.message : 'Validated' });
+      results.push({ table, status: error ? 'error' : 'ok', message: error ? getErrorString(error) : 'Validated' });
     }
     setHealthResults(results);
     setIsChecking(false);
+  };
+
+  const copyRepairSql = () => {
+    navigator.clipboard.writeText(repairSql);
+    alert("คัดลอก SQL Script เรียบร้อยแล้ว! กรุณานำไปรันที่ Supabase SQL Editor เพื่อซ่อมแซม duration_hours");
   };
 
   return (
@@ -150,56 +189,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
         </div>
       )}
 
-      {activeTab === 'INTEGRATION' && (
-        <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-10">
-           <div className="flex items-center gap-6">
-              <div className="p-5 bg-emerald-50 text-emerald-600 rounded-[28px]">
-                 <Link size={32}/>
-              </div>
-              <div>
-                 <h2 className="text-xl font-black uppercase italic tracking-tighter">LINE Integration</h2>
-                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Messaging API Configuration</p>
-              </div>
-           </div>
-
-           <div className="space-y-6">
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">LINE Channel Access Token</label>
-                 <input type="password" value={lineConfig.accessToken} onChange={e => setLineConfig({...lineConfig, accessToken: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">LINE Group ID / User ID (Target)</label>
-                 <input type="text" value={lineConfig.groupId} onChange={e => setLineConfig({...lineConfig, groupId: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
-              </div>
-           </div>
-
-           <button onClick={saveLineConfig} disabled={isSaving} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl flex items-center justify-center gap-3">
-              {isSaving ? "Saving..." : <><Save size={18}/> บันทึกการเชื่อมต่อ LINE</>}
-           </button>
-        </div>
-      )}
-
       {activeTab === 'HEALTH' && (
-        <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
-           <div className="flex items-center justify-between">
-              <div>
-                 <h3 className="text-xl font-black uppercase italic tracking-tighter">Diagnostics</h3>
-                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Schema Compliance Audit</p>
-              </div>
-              <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl uppercase font-black text-[9px] flex items-center gap-2">
-                 <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'เริ่มตรวจสอบ'}
-              </button>
-           </div>
-           <div className="space-y-3">
-              {healthResults.map((r, i) => (
-                 <div key={i} className={`p-5 rounded-3xl border flex items-center justify-between transition-all ${r.status === 'ok' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                    <div className="flex items-center gap-4">
-                       {r.status === 'ok' ? <CheckCircle2 className="text-emerald-500" size={18}/> : <AlertCircle className="text-rose-500" size={18}/>}
-                       <span className="text-[10px] font-black uppercase">TABLE: {r.table}</span>
-                    </div>
-                    <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>{r.status}</span>
+        <div className="space-y-10">
+           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
+              <div className="flex items-center justify-between">
+                 <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">System Health Check</h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Database & Connection Audit</p>
                  </div>
-              ))}
+                 <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl uppercase font-black text-[9px] flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-100">
+                    <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'เริ่มตรวจสอบ'}
+                 </button>
+              </div>
+              
+              <div className="space-y-3">
+                 {healthResults.length > 0 ? healthResults.map((r, i) => (
+                    <div key={i} className={`p-5 rounded-3xl border flex items-center justify-between transition-all ${r.status === 'ok' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                       <div className="flex items-center gap-4">
+                          {r.status === 'ok' ? <CheckCircle2 className="text-emerald-500" size={18}/> : <AlertCircle className="text-rose-500" size={18}/>}
+                          <span className="text-[10px] font-black uppercase tracking-wider">Table: {r.table}</span>
+                       </div>
+                       <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>{r.status}</span>
+                    </div>
+                 )) : (
+                    <div className="py-10 text-center border-2 border-dashed border-slate-100 rounded-[32px] opacity-40">
+                       <Database className="mx-auto mb-3" size={32}/>
+                       <p className="text-[10px] font-black uppercase tracking-widest">กดปุ่มเริ่มตรวจสอบเพื่อเริ่มการ Diagnostics</p>
+                    </div>
+                 )}
+              </div>
+           </div>
+
+           <div className="bg-slate-900 p-10 rounded-[48px] text-white space-y-8 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+              
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                 <div className="flex items-center gap-4">
+                    <div className="p-4 bg-blue-600 rounded-2xl text-white shadow-xl">
+                       <FileCode size={24}/>
+                    </div>
+                    <div>
+                       <h4 className="text-lg font-black uppercase italic tracking-tighter">SQL Schema Repair Tool</h4>
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed mt-1">
+                          เครื่องมือซ่อมแซมโครงสร้างฐานข้อมูล (Schema Repair)
+                       </p>
+                    </div>
+                 </div>
+                 <button onClick={copyRepairSql} className="h-12 px-8 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/10 flex items-center gap-3 transition-all active:scale-95">
+                    <Copy size={16}/> คัดลอก SQL Code
+                 </button>
+              </div>
+
+              <div className="relative group">
+                 <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 text-[8px] font-black uppercase tracking-[0.2em] rounded-md z-10 shadow-lg">SQL EDITOR CODE</div>
+                 <pre className="bg-black/40 p-8 rounded-[32px] text-[11px] font-mono text-blue-300 overflow-x-auto whitespace-pre-wrap leading-relaxed border border-white/5 shadow-inner">
+                    {repairSql}
+                 </pre>
+              </div>
+
+              <div className="bg-blue-500/10 p-6 rounded-3xl border border-blue-500/20 flex gap-4 items-start">
+                 <AlertCircle className="text-blue-400 shrink-0 mt-0.5" size={18}/>
+                 <p className="text-[10px] text-blue-100 font-medium leading-relaxed">
+                    <b>คำแนะนำ:</b> หากคุณพบ Error เช่น <span className="text-blue-300">"duration_hours missing"</span> ให้นำโค้ดด้านบนนี้ไปรันในเมนู **SQL Editor** ของ Supabase และกดรันเพื่อซ่อมแซมโครงสร้างและรีเฟรชแคช
+                 </p>
+              </div>
            </div>
         </div>
       )}

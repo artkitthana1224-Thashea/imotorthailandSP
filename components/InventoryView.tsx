@@ -1,16 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { Package, Search, Trash2, AlertCircle, Banknote, X, Save, Edit3 } from 'lucide-react';
-import { Part } from '../types';
+import { Part, Company } from '../types';
 import { supabase } from '../services/supabaseClient';
 import { sendInventoryAlert } from '../services/lineService';
+import { generateUUID } from '../constants';
 
 interface InventoryViewProps {
   parts: Part[];
   setParts: React.Dispatch<React.SetStateAction<Part[]>>;
+  currentCompany: Company;
 }
 
-export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts }) => {
+export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts, currentCompany }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -19,8 +21,6 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
   const [formData, setFormData] = useState<Partial<Part>>({
     sku: '', name: '', category: 'Battery', cost_price: 0, sale_price: 0, stock_level: 0, min_stock: 5
   });
-
-  const generateNumericId = () => Date.now().toString() + Math.floor(Math.random() * 100).toString().padStart(2, '0');
 
   const fetchParts = async () => {
     const { data } = await supabase.from('parts').select('*').order('sku');
@@ -41,15 +41,14 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
       sale_price: formData.sale_price,
       stock_level: formData.stock_level,
       min_stock: formData.min_stock,
-      company_id: '1001'
+      company_id: currentCompany.id
     };
 
     const { error } = editingPart 
       ? await supabase.from('parts').update(payload).eq('id', editingPart.id)
-      : await supabase.from('parts').insert([{ ...payload, id: generateNumericId() }]);
+      : await supabase.from('parts').insert([{ ...payload, id: generateUUID() }]);
 
     if (!error) {
-      // Check for low stock alert
       if (payload.stock_level <= payload.min_stock) {
         await sendInventoryAlert(payload.name, payload.sku, payload.stock_level);
       }
@@ -100,7 +99,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
                </thead>
                <tbody className="divide-y divide-slate-50">
                   {parts.filter(p => p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku?.toLowerCase().includes(searchTerm.toLowerCase())).map(part => (
-                     <tr key={part.id} className="hover:bg-slate-50 transition-all">
+                     <tr key={part.id} className="hover:bg-slate-50 transition-all group">
                         <td className="px-10 py-6">
                            <p className="text-slate-900 text-xs uppercase">{part.sku}</p>
                            <p className="text-[10px] text-slate-400 uppercase">{part.name}</p>
@@ -114,8 +113,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
                         <td className="px-10 py-6 text-right text-[10px] text-slate-400">฿{part.cost_price?.toLocaleString()}</td>
                         <td className="px-10 py-6 text-right text-xs text-blue-600 font-black italic">฿{part.sale_price?.toLocaleString()}</td>
                         <td className="px-10 py-6 text-right">
-                           <button onClick={() => { setEditingPart(part); setFormData(part); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-500 mr-2"><Edit3 size={16}/></button>
-                           <button className="p-2 text-slate-300 hover:text-rose-500"><Trash2 size={16}/></button>
+                           <button onClick={() => { setEditingPart(part); setFormData(part); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-500 mr-2 transition-colors"><Edit3 size={16}/></button>
+                           <button className="p-2 text-slate-200 hover:text-rose-500 transition-colors"><Trash2 size={16}/></button>
                         </td>
                      </tr>
                   ))}

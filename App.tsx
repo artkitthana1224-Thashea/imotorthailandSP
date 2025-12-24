@@ -28,31 +28,29 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
     fetchAllData();
-    return () => controller.abort();
   }, []);
 
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
     
-    // Add a race against a timeout to prevent infinite white screen if network is flaky
     const timeout = new Promise((_, reject) => 
       setTimeout(() => reject(new Error("Request Timeout")), 15000)
     );
 
     try {
       const fetchPromise = Promise.all([
+        supabase.from('companies').select('*').limit(1),
         supabase.from('vehicles').select('*'),
         supabase.from('work_orders').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('name'),
         supabase.from('parts').select('*')
       ]);
 
-      const [vRes, woRes, cRes, pRes] = await (Promise.race([fetchPromise, timeout]) as Promise<any[]>);
+      const [compRes, vRes, woRes, cRes, pRes] = await (Promise.race([fetchPromise, timeout]) as Promise<any[]>);
 
-      const firstError = vRes.error || woRes.error || cRes.error || pRes.error;
+      const firstError = compRes.error || vRes.error || woRes.error || cRes.error || pRes.error;
       
       if (firstError) {
         console.error("Database initialization error:", firstError.message || firstError);
@@ -62,6 +60,14 @@ const App: React.FC = () => {
         } else {
           setError(firstError.message || "Unknown Connection Error");
         }
+      }
+
+      // If we have a real company in the DB, use its ID to avoid Foreign Key errors
+      if (compRes.data && compRes.data.length > 0) {
+        setCurrentCompany(compRes.data[0]);
+      } else {
+        // Only error if we absolutely need a company to function
+        console.warn("No companies found in database. Foreign key errors may occur.");
       }
 
       if (vRes.data) setVehicles(vRes.data);
@@ -84,7 +90,6 @@ const App: React.FC = () => {
       console.error("Critical fetch error:", err);
       setError(err.message || "Critical System Error");
     } finally {
-      // Small delay to ensure smoother transition
       setTimeout(() => setLoading(false), 300);
     }
   };
@@ -148,10 +153,10 @@ const App: React.FC = () => {
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard setActiveTab={setActiveTab} />;
-      case 'service': return <WorkOrderView workOrders={workOrders} setWorkOrders={setWorkOrders} vehicles={vehicles} />;
-      case 'inventory': return <InventoryView parts={parts} setParts={setParts} />;
-      case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} />;
-      case 'vehicles': return <VehicleView vehicles={vehicles} setVehicles={setVehicles} workOrders={workOrders} />;
+      case 'service': return <WorkOrderView workOrders={workOrders} setWorkOrders={setWorkOrders} vehicles={vehicles} currentCompany={currentCompany} />;
+      case 'inventory': return <InventoryView parts={parts} setParts={setParts} currentCompany={currentCompany} />;
+      case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} currentCompany={currentCompany} />;
+      case 'vehicles': return <VehicleView vehicles={vehicles} setVehicles={setVehicles} workOrders={workOrders} currentCompany={currentCompany} />;
       case 'billing': return <BillingView currentCompany={currentCompany} />;
       case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
       default: return <Dashboard setActiveTab={setActiveTab} />;

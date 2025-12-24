@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, Search, MapPin, ChevronRight, X, Save, Trash2, Phone, Mail, UserPlus } from 'lucide-react';
-import { Customer } from '../types';
+import { Customer, Company } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { generateUUID } from '../constants';
 
 interface CustomerViewProps {
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
+  currentCompany: Company;
 }
 
-export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustomers }) => {
+export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustomers, currentCompany }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProvince, setSelectedProvince] = useState('ทั้งหมด');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,10 +28,6 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustom
     loyalty_points: 0
   });
 
-  const generateNumericId = () => {
-    return Date.now().toString() + Math.floor(Math.random() * 100).toString().padStart(2, '0');
-  };
-
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customers').select('*').order('name');
     if (!error && data) setCustomers(data);
@@ -43,7 +41,6 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustom
 
     setIsSaving(true);
     const customerData = {
-      id: editingCustomer?.id || generateNumericId(),
       name: formData.name,
       phone: formData.phone,
       email: formData.email,
@@ -51,12 +48,12 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustom
       address: formData.address,
       type: formData.type || 'INDIVIDUAL',
       loyalty_points: formData.loyalty_points || 0,
-      company_id: '1001' 
+      company_id: currentCompany.id
     };
 
     const { error } = editingCustomer 
       ? await supabase.from('customers').update(customerData).eq('id', editingCustomer.id)
-      : await supabase.from('customers').insert([customerData]);
+      : await supabase.from('customers').insert([{ ...customerData, id: generateUUID() }]);
 
     if (error) {
       alert("Error: " + error.message);
