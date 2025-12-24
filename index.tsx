@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
+import App from './App';
 
 // Global error handling for boot-up phase
 window.onerror = function(message, source, lineno, colno, error) {
