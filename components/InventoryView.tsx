@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Package, Search, Trash2, AlertCircle, Banknote, X, Save, Edit3 } from 'lucide-react';
 import { Part } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { sendInventoryAlert } from '../services/lineService';
 
 interface InventoryViewProps {
   parts: Part[];
@@ -48,6 +49,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
       : await supabase.from('parts').insert([{ ...payload, id: generateNumericId() }]);
 
     if (!error) {
+      // Check for low stock alert
+      if (payload.stock_level <= payload.min_stock) {
+        await sendInventoryAlert(payload.name, payload.sku, payload.stock_level);
+      }
       await fetchParts();
       closeModal();
     } else {
@@ -101,10 +106,13 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
                            <p className="text-[10px] text-slate-400 uppercase">{part.name}</p>
                         </td>
                         <td className="px-10 py-6 text-center">
-                           <span className={`text-sm ${part.stock_level <= part.min_stock ? 'text-rose-500' : 'text-slate-900'}`}>{part.stock_level}</span>
+                           <span className={`text-sm font-black ${part.stock_level <= part.min_stock ? 'text-rose-500 flex items-center justify-center gap-1' : 'text-slate-900'}`}>
+                             {part.stock_level}
+                             {part.stock_level <= part.min_stock && <AlertCircle size={12} />}
+                           </span>
                         </td>
                         <td className="px-10 py-6 text-right text-[10px] text-slate-400">฿{part.cost_price?.toLocaleString()}</td>
-                        <td className="px-10 py-6 text-right text-xs text-blue-600 italic">฿{part.sale_price?.toLocaleString()}</td>
+                        <td className="px-10 py-6 text-right text-xs text-blue-600 font-black italic">฿{part.sale_price?.toLocaleString()}</td>
                         <td className="px-10 py-6 text-right">
                            <button onClick={() => { setEditingPart(part); setFormData(part); setIsModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-500 mr-2"><Edit3 size={16}/></button>
                            <button className="p-2 text-slate-300 hover:text-rose-500"><Trash2 size={16}/></button>
@@ -121,13 +129,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
            <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl animate-in zoom-in-95 overflow-hidden">
               <div className="p-10 border-b border-slate-50 flex items-center justify-between">
                  <div>
-                    <h3 className="text-xl uppercase italic tracking-tighter">ลงทะเบียนอะไหล่ใหม่</h3>
-                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">Register New Part</p>
+                    <h3 className="text-xl uppercase italic tracking-tighter">{editingPart ? 'แก้ไขอะไหล่' : 'ลงทะเบียนอะไหล่ใหม่'}</h3>
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">Stock Parameters Configuration</p>
                  </div>
                  <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-xl transition-all"><X size={24}/></button>
               </div>
               <div className="p-10 space-y-6">
-                 {/* SKU & Name with Labels */}
                  <div className="space-y-4">
                     <div className="space-y-1">
                        <label className="text-[9px] uppercase tracking-widest text-slate-400 ml-1">รหัส SKU</label>
@@ -139,28 +146,27 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ parts, setParts })
                     </div>
                  </div>
 
-                 {/* 2x2 Numeric Grid with Labels */}
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                        <label className="text-[9px] uppercase tracking-widest text-slate-400 ml-1">ราคาทุน</label>
-                       <input type="number" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: Number(e.target.value)})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl text-xs outline-none text-blue-600" />
+                       <input type="number" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: Number(e.target.value)})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl text-xs outline-none" />
                     </div>
                     <div className="space-y-1">
                        <label className="text-[9px] uppercase tracking-widest text-blue-500 ml-1">ราคาขาย</label>
-                       <input type="number" value={formData.sale_price} onChange={e => setFormData({...formData, sale_price: Number(e.target.value)})} className="w-full h-14 px-6 bg-blue-50/50 text-blue-600 rounded-2xl text-xs outline-none" />
+                       <input type="number" value={formData.sale_price} onChange={e => setFormData({...formData, sale_price: Number(e.target.value)})} className="w-full h-14 px-6 bg-blue-50/50 text-blue-600 rounded-2xl text-xs font-black outline-none" />
                     </div>
                     <div className="space-y-1">
                        <label className="text-[9px] uppercase tracking-widest text-slate-400 ml-1">จำนวนสต็อก</label>
                        <input type="number" value={formData.stock_level} onChange={e => setFormData({...formData, stock_level: Number(e.target.value)})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl text-xs outline-none" />
                     </div>
                     <div className="space-y-1">
-                       <label className="text-[9px] uppercase tracking-widest text-rose-500 ml-1">จุดเตือนสต็อกต่ำ</label>
-                       <input type="number" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: Number(e.target.value)})} className="w-full h-14 px-6 bg-rose-50/50 text-rose-600 rounded-2xl text-xs outline-none" />
+                       <label className="text-[9px] uppercase tracking-widest text-rose-500 ml-1">จุดเตือนสต็อกต่ำ (Alert)</label>
+                       <input type="number" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: Number(e.target.value)})} className="w-full h-14 px-6 bg-rose-50/50 text-rose-600 rounded-2xl text-xs font-black outline-none" />
                     </div>
                  </div>
 
                  <button onClick={handleSavePart} disabled={isSaving} className="w-full py-5 bg-slate-900 text-white rounded-2xl uppercase tracking-widest text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-                    {isSaving ? "กําลังบันทึก..." : <><Save size={18}/> บันทึกข้อมูลอะไหล่</>}
+                    {isSaving ? "กําลังบันทึก..." : <><Save size={18}/> บันทึกและตั้งค่าการแจ้งเตือน</>}
                  </button>
               </div>
            </div>

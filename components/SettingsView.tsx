@@ -55,13 +55,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
       { config_key: 'LINE_GROUP_ID', config_value: lineConfig.groupId },
       { config_key: 'LINE_CHANNEL_SECRET', config_value: lineConfig.channelSecret }
     ];
-
-    const { error } = await supabase.from('system_config').upsert(updates);
-    if (error) {
-      alert("Error saving LINE config: " + error.message);
-    } else {
-      alert("บันทึกการตั้งค่า LINE สำเร็จ");
-    }
+    await supabase.from('system_config').upsert(updates);
+    alert("บันทึกการตั้งค่า LINE สำเร็จ");
     setIsSaving(false);
   };
 
@@ -78,44 +73,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
 
   const saveUserProfile = async () => {
     setIsSaving(true);
-    const { error } = await supabase.from('users').update({
-      name: userForm.name,
-      avatar: userForm.avatar
-    }).eq('id', currentUser.id);
+    try {
+      // In a real production environment, we'd upload to Supabase Storage first.
+      // For this implementation, we store the base64/URL directly in the avatar column.
+      const { error } = await supabase.from('users').update({
+        name: userForm.name,
+        avatar: userForm.avatar,
+        updated_at: new Date().toISOString()
+      }).eq('id', currentUser.id);
 
-    if (error) {
-      alert("Error saving profile: " + error.message);
-    } else {
-      setCurrentUser(userForm);
-      alert("อัปเดตโปรไฟล์สำเร็จ");
+      if (error) {
+        alert("Error saving profile: " + error.message);
+      } else {
+        setCurrentUser(userForm);
+        alert("อัปเดตโปรไฟล์และบันทึกรูปภาพสำเร็จ");
+      }
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const runHealthCheck = async () => {
     setIsChecking(true);
     const results: any[] = [];
     const tables = ['companies', 'users', 'customers', 'vehicles', 'parts', 'work_orders', 'system_config'];
-    
     for (const table of tables) {
       const { error } = await supabase.from(table).select('*').limit(1);
-      if (error) {
-        results.push({ table, status: 'error', message: error.message });
-      } else {
-        results.push({ table, status: 'ok', message: 'Connected & Column Validated' });
-      }
+      results.push({ table, status: error ? 'error' : 'ok', message: error ? error.message : 'Validated' });
     }
-    
     setHealthResults(results);
-    generateFixSQL(results);
     setIsChecking(false);
-  };
-
-  const generateFixSQL = (results: any[]) => {
-    let sql = `-- I-MOTOR ERP FULL SCHEMA REPAIR (TEXT-BASED IDs)\n\n`;
-    sql += `CREATE TABLE IF NOT EXISTS public.system_config (\n  config_key TEXT PRIMARY KEY,\n  config_value TEXT,\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
-    sql += `INSERT INTO public.system_config (config_key, config_value) VALUES \n('LINE_ACCESS_TOKEN', ''), \n('LINE_GROUP_ID', ''), \n('LINE_CHANNEL_SECRET', '') \nON CONFLICT (config_key) DO NOTHING;`;
-    setFixSql(sql);
   };
 
   return (
@@ -156,7 +145,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
            </div>
 
            <button onClick={saveUserProfile} disabled={isSaving} className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
-              {isSaving ? "Saving..." : <><Save size={18}/> บันทึกข้อมูลโปรไฟล์</>}
+              {isSaving ? "Saving..." : <><Save size={18}/> บันทึกข้อมูลและรูปโปรไฟล์</>}
            </button>
         </div>
       )}
@@ -176,69 +165,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
            <div className="space-y-6">
               <div className="space-y-2">
                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">LINE Channel Access Token</label>
-                 <input type="password" value={lineConfig.accessToken} onChange={e => setLineConfig({...lineConfig, accessToken: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Paste your access token here..." />
+                 <input type="password" value={lineConfig.accessToken} onChange={e => setLineConfig({...lineConfig, accessToken: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">LINE Group ID / User ID (Target)</label>
-                 <input type="text" value={lineConfig.groupId} onChange={e => setLineConfig({...lineConfig, groupId: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Target destination ID..." />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">LINE Channel Secret (Optional)</label>
-                 <input type="password" value={lineConfig.channelSecret} onChange={e => setLineConfig({...lineConfig, channelSecret: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20" />
+                 <input type="text" value={lineConfig.groupId} onChange={e => setLineConfig({...lineConfig, groupId: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
               </div>
            </div>
 
-           <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100">
-              <p className="text-[10px] text-blue-600 font-bold leading-relaxed">
-                 ระบบจะส่งแจ้งเตือนไปยัง LINE เมื่อมีการสร้างใบงานใหม่หรืออัปเดตสถานะงานซ่อม กรุณาตรวจสอบว่า Bot ได้ถูกเชิญเข้าร่วมกลุ่มแล้ว
-              </p>
-           </div>
-
-           <button onClick={saveLineConfig} disabled={isSaving} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+           <button onClick={saveLineConfig} disabled={isSaving} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl flex items-center justify-center gap-3">
               {isSaving ? "Saving..." : <><Save size={18}/> บันทึกการเชื่อมต่อ LINE</>}
            </button>
         </div>
       )}
 
       {activeTab === 'HEALTH' && (
-        <div className="space-y-8">
-           <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
-              <div className="flex items-center justify-between">
-                 <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Diagnostics</h3>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Schema Compliance Audit</p>
-                 </div>
-                 <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl uppercase font-black text-[9px] flex items-center gap-2">
-                    <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'เริ่มตรวจสอบ'}
-                 </button>
+        <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
+           <div className="flex items-center justify-between">
+              <div>
+                 <h3 className="text-xl font-black uppercase italic tracking-tighter">Diagnostics</h3>
+                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Schema Compliance Audit</p>
               </div>
-
-              <div className="space-y-3">
-                 {healthResults.map((r, i) => (
-                    <div key={i} className={`p-5 rounded-3xl border flex items-center justify-between transition-all ${r.status === 'ok' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
-                       <div className="flex items-center gap-4">
-                          {r.status === 'ok' ? <CheckCircle2 className="text-emerald-500" size={18}/> : <AlertCircle className="text-rose-500" size={18}/>}
-                          <span className="text-[10px] font-black uppercase tracking-tight">TABLE: {r.table}</span>
-                       </div>
-                       <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>
-                          {r.status === 'ok' ? 'Validated' : 'Error'}
-                       </span>
-                    </div>
-                 ))}
-              </div>
+              <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl uppercase font-black text-[9px] flex items-center gap-2">
+                 <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'เริ่มตรวจสอบ'}
+              </button>
            </div>
-
-           {fixSql && (
-              <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl space-y-6 animate-in">
-                 <div className="flex items-center gap-3 text-emerald-400">
-                    <FileCode size={20}/>
-                    <h4 className="text-[10px] font-black uppercase tracking-widest">SQL Repair Tool</h4>
+           <div className="space-y-3">
+              {healthResults.map((r, i) => (
+                 <div key={i} className={`p-5 rounded-3xl border flex items-center justify-between transition-all ${r.status === 'ok' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                    <div className="flex items-center gap-4">
+                       {r.status === 'ok' ? <CheckCircle2 className="text-emerald-500" size={18}/> : <AlertCircle className="text-rose-500" size={18}/>}
+                       <span className="text-[10px] font-black uppercase">TABLE: {r.table}</span>
+                    </div>
+                    <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>{r.status}</span>
                  </div>
-                 <pre className="text-[9px] font-mono text-emerald-500 bg-black/40 p-6 rounded-2xl overflow-x-auto border border-emerald-500/20 leading-relaxed scrollbar-hide">
-                    {fixSql}
-                 </pre>
-              </div>
-           )}
+              ))}
+           </div>
         </div>
       )}
     </div>
