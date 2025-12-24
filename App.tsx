@@ -12,7 +12,7 @@ import { BillingView } from './components/BillingView';
 import { MOCK_COMPANIES, MOCK_USERS } from './constants';
 import { WorkOrder, Customer, Part, Company, User, Vehicle } from './types';
 import { supabase } from './services/supabaseClient';
-import { AlertCircle, RefreshCcw } from 'lucide-react';
+import { AlertCircle, RefreshCcw, ShieldCheck } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -28,26 +28,34 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     fetchAllData();
+    return () => controller.abort();
   }, []);
 
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
+    
+    // Add a race against a timeout to prevent infinite white screen if network is flaky
+    const timeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Request Timeout")), 15000)
+    );
+
     try {
-      const [vRes, woRes, cRes, pRes] = await Promise.all([
+      const fetchPromise = Promise.all([
         supabase.from('vehicles').select('*'),
         supabase.from('work_orders').select('*').order('created_at', { ascending: false }),
         supabase.from('customers').select('*').order('name'),
         supabase.from('parts').select('*')
       ]);
 
+      const [vRes, woRes, cRes, pRes] = await (Promise.race([fetchPromise, timeout]) as Promise<any[]>);
+
       const firstError = vRes.error || woRes.error || cRes.error || pRes.error;
       
       if (firstError) {
         console.error("Database initialization error:", firstError.message || firstError);
-        
-        // Check if error implies missing tables
         const msg = firstError.message?.toLowerCase() || "";
         if (msg.includes("does not exist") || msg.includes("relation") || msg.includes("not found")) {
           setError("DATABASE_NOT_READY");
@@ -76,16 +84,26 @@ const App: React.FC = () => {
       console.error("Critical fetch error:", err);
       setError(err.message || "Critical System Error");
     } finally {
-      setLoading(false);
+      // Small delay to ensure smoother transition
+      setTimeout(() => setLoading(false), 300);
     }
   };
 
   const activeContent = useMemo(() => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 animate-pulse">
-           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Synchronizing Data...</p>
+        <div className="flex flex-col items-center justify-center h-[70vh] space-y-8 animate-in">
+           <div className="relative">
+              <div className="w-20 h-20 border-[6px] border-blue-100 rounded-full"></div>
+              <div className="w-20 h-20 border-[6px] border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                 <ShieldCheck className="text-blue-600 animate-pulse" size={24} />
+              </div>
+           </div>
+           <div className="text-center space-y-2">
+              <h3 className="text-sm font-black uppercase italic tracking-tighter text-slate-900">I-MOTOR CENTRAL</h3>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 animate-pulse">Initializing System...</p>
+           </div>
         </div>
       );
     }
