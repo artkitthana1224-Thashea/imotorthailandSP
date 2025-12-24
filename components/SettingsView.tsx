@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, Camera, Edit3, X, RefreshCw, ShieldCheck, AlertCircle, FileCode, CheckCircle2 } from 'lucide-react';
+import { Save, Camera, X, RefreshCw, ShieldCheck, AlertCircle, FileCode, CheckCircle2 } from 'lucide-react';
 import { Company, User, UserRole } from '../types';
 import { supabase } from '../services/supabaseClient';
 
@@ -28,7 +28,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
       if (error) {
         results.push({ table, status: 'error', message: error.message });
       } else {
-        results.push({ table, status: 'ok', message: 'Connection Verified' });
+        results.push({ table, status: 'ok', message: 'Connected & Column Validated' });
       }
     }
     
@@ -38,58 +38,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
   };
 
   const generateFixSQL = (results: any[]) => {
-    let sql = `-- I-MOTOR ERP SCHEMA REPAIR SCRIPT (RUN IN SUPABASE SQL EDITOR)\n\n`;
+    let sql = `-- I-MOTOR ERP FULL SCHEMA RESET & REPAIR (TEXT-BASED IDs)\n`;
+    sql += `-- RUN THIS IN SUPABASE SQL EDITOR TO FIX UUID ERRORS\n\n`;
     
-    // Fix common missing columns causing errors
-    sql += `-- 1. Fix Companies (branch_name)\n`;
-    sql += `ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS branch_name TEXT DEFAULT 'Headquarters';\n\n`;
-    
-    sql += `-- 2. Fix Customers (type)\n`;
-    sql += `ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'INDIVIDUAL';\n`;
-    sql += `ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS loyalty_points INT DEFAULT 0;\n\n`;
-    
-    sql += `-- 3. Fix Users Table If Missing\n`;
-    sql += `CREATE TABLE IF NOT EXISTS public.users (\n  id TEXT PRIMARY KEY,\n  company_id TEXT,\n  name TEXT,\n  email TEXT,\n  role TEXT,\n  avatar TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+    sql += `-- Step 1: Drop existing tables (Warning: This will clear data)\n`;
+    sql += `DROP TABLE IF EXISTS work_orders;\n`;
+    sql += `DROP TABLE IF EXISTS vehicles;\n`;
+    sql += `DROP TABLE IF EXISTS customers;\n`;
+    sql += `DROP TABLE IF EXISTS parts;\n`;
+    sql += `DROP TABLE IF EXISTS users;\n`;
+    sql += `DROP TABLE IF EXISTS companies;\n\n`;
 
-    sql += `-- 4. Fix Parts (cost_price, sale_price, stock_level, min_stock)\n`;
-    sql += `CREATE TABLE IF NOT EXISTS public.parts (\n  id TEXT PRIMARY KEY,\n  company_id TEXT DEFAULT 'c1',\n  sku TEXT,\n  name TEXT,\n  category TEXT,\n  cost_price NUMERIC DEFAULT 0,\n  sale_price NUMERIC DEFAULT 0,\n  stock_level INT DEFAULT 0,\n  min_stock INT DEFAULT 5,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+    sql += `-- Step 2: Create Companies\n`;
+    sql += `CREATE TABLE companies (\n  id TEXT PRIMARY KEY,\n  name TEXT,\n  logo TEXT,\n  tax_id TEXT,\n  plan TEXT,\n  vat_rate NUMERIC,\n  address TEXT,\n  branch_name TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
 
-    sql += `-- 5. Create System Config (LINE Keys)\n`;
-    sql += `CREATE TABLE IF NOT EXISTS public.system_config (\n  config_key TEXT PRIMARY KEY,\n  config_value TEXT,\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+    sql += `-- Step 3: Create Users\n`;
+    sql += `CREATE TABLE users (\n  id TEXT PRIMARY KEY,\n  company_id TEXT REFERENCES companies(id),\n  name TEXT,\n  email TEXT,\n  role TEXT,\n  avatar TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
 
-    sql += `-- Note: After running this, please Refresh the page.`;
+    sql += `-- Step 4: Create Customers\n`;
+    sql += `CREATE TABLE customers (\n  id TEXT PRIMARY KEY,\n  company_id TEXT REFERENCES companies(id),\n  name TEXT,\n  phone TEXT,\n  email TEXT,\n  province TEXT,\n  address TEXT,\n  type TEXT DEFAULT 'INDIVIDUAL',\n  loyalty_points INT DEFAULT 0,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+
+    sql += `-- Step 5: Create Vehicles\n`;
+    sql += `CREATE TABLE vehicles (\n  id TEXT PRIMARY KEY,\n  customer_id TEXT REFERENCES customers(id),\n  brand TEXT,\n  model TEXT,\n  vin TEXT UNIQUE,\n  battery_type TEXT,\n  motor_power TEXT,\n  warranty_until TEXT,\n  qr_code TEXT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+
+    sql += `-- Step 6: Create Parts\n`;
+    sql += `CREATE TABLE parts (\n  id TEXT PRIMARY KEY,\n  company_id TEXT REFERENCES companies(id),\n  sku TEXT,\n  name TEXT,\n  category TEXT,\n  cost_price NUMERIC,\n  sale_price NUMERIC,\n  stock_level INT,\n  min_stock INT,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+
+    sql += `-- Step 7: Create Work Orders\n`;
+    sql += `CREATE TABLE work_orders (\n  id TEXT PRIMARY KEY,\n  order_number TEXT,\n  company_id TEXT REFERENCES companies(id),\n  vehicle_id TEXT REFERENCES vehicles(id),\n  customer_id TEXT REFERENCES customers(id),\n  status TEXT,\n  issue_description TEXT,\n  labor_cost NUMERIC,\n  total_amount NUMERIC,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n`;
+
+    sql += `-- Step 8: Initial Data\n`;
+    sql += `INSERT INTO companies (id, name, logo) VALUES ('1001', 'I-MOTOR MANUFACTURING', 'https://i-motor-thailand.com/wp-content/uploads/2022/03/logo-i-motor.png');\n\n`;
+
+    sql += `-- After running, please refresh the browser tab.`;
     setFixSql(sql);
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in pb-24">
       <div className="flex bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
-        <button onClick={() => setActiveTab('PROFILE')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'PROFILE' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>โปรไฟล์บริษัท</button>
-        <button onClick={() => setActiveTab('HEALTH')} className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'HEALTH' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>ระบบตรวจสอบ</button>
+        <button onClick={() => setActiveTab('PROFILE')} className={`flex-1 py-4 rounded-xl text-[10px] uppercase tracking-widest transition-all ${activeTab === 'PROFILE' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>โปรไฟล์บริษัท</button>
+        <button onClick={() => setActiveTab('HEALTH')} className={`flex-1 py-4 rounded-xl text-[10px] uppercase tracking-widest transition-all ${activeTab === 'HEALTH' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>ระบบตรวจสอบ</button>
       </div>
 
       {activeTab === 'PROFILE' && (
         <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-10">
            <div className="flex items-center gap-8">
-              <div className="w-24 h-24 rounded-[28px] bg-slate-50 p-4 border-2 border-slate-100">
+              <div className="w-24 h-24 rounded-[28px] bg-slate-50 p-4 border-2 border-slate-100 flex items-center justify-center overflow-hidden">
                  <img src={companyForm.logo} className="w-full h-full object-contain" />
               </div>
               <div>
-                 <h2 className="text-xl font-black uppercase italic tracking-tighter">ตั้งค่าบริษัท</h2>
-                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Company & Brand Management</p>
+                 <h2 className="text-xl uppercase italic tracking-tighter">ตั้งค่าบริษัท</h2>
+                 <p className="text-[10px] text-blue-600 uppercase tracking-widest">Brand Management</p>
               </div>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">ชื่อบริษัท</label>
-                 <input type="text" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-bold text-xs outline-none" />
+                 <label className="text-[10px] uppercase text-slate-400 ml-1">ชื่อบริษัท</label>
+                 <input type="text" value={companyForm.name} onChange={e => setCompanyForm({...companyForm, name: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl text-xs outline-none" />
               </div>
               <div className="space-y-2">
-                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">สาขา</label>
-                 <input type="text" value={companyForm.branch_name} onChange={e => setCompanyForm({...companyForm, branch_name: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-bold text-xs outline-none" />
+                 <label className="text-[10px] uppercase text-slate-400 ml-1">ชื่อสาขา</label>
+                 <input type="text" value={companyForm.branch_name} onChange={e => setCompanyForm({...companyForm, branch_name: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl text-xs outline-none" />
               </div>
            </div>
-           <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl flex items-center justify-center gap-3">
+           <button className="w-full py-5 bg-slate-900 text-white rounded-2xl uppercase text-[10px] shadow-xl flex items-center justify-center gap-3">
               <Save size={18}/> บันทึกข้อมูลบริษัท
            </button>
         </div>
@@ -100,11 +113,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
            <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
               <div className="flex items-center justify-between">
                  <div>
-                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Database Consistency</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ตรวจสอบและแก้ไขปัญหาการเชื่อมต่อฐานข้อมูล</p>
+                    <h3 className="text-xl uppercase italic tracking-tighter">Database Diagnostics</h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">ตรวจสอบความสอดคล้องของ Schema ฐานข้อมูล</p>
                  </div>
-                 <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-[9px] flex items-center gap-2">
-                    <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'ตรวจสอบระบบ'}
+                 <button onClick={runHealthCheck} disabled={isChecking} className="px-6 py-3 bg-blue-600 text-white rounded-xl uppercase text-[9px] flex items-center gap-2">
+                    <RefreshCw size={14} className={isChecking ? 'animate-spin' : ''}/> {isChecking ? 'Checking...' : 'เริ่มตรวจสอบ'}
                  </button>
               </div>
 
@@ -113,10 +126,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
                     <div key={i} className={`p-5 rounded-2xl border flex items-center justify-between ${r.status === 'ok' ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
                        <div className="flex items-center gap-4">
                           {r.status === 'ok' ? <CheckCircle2 className="text-emerald-500" size={18}/> : <AlertCircle className="text-rose-500" size={18}/>}
-                          <span className="text-[10px] font-black uppercase tracking-tight">TABLE: {r.table}</span>
+                          <span className="text-[10px] uppercase tracking-tight">TABLE: {r.table}</span>
                        </div>
-                       <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>
-                          {r.status === 'ok' ? 'Verified' : 'Error'}
+                       <span className={`text-[8px] uppercase px-3 py-1 rounded-full ${r.status === 'ok' ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>
+                          {r.status === 'ok' ? 'Validated' : 'Error'}
                        </span>
                     </div>
                  ))}
@@ -127,14 +140,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
               <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl space-y-6 animate-in">
                  <div className="flex items-center gap-3 text-emerald-400">
                     <FileCode size={20}/>
-                    <h4 className="text-[10px] font-black uppercase tracking-widest">SQL REPAIR SCRIPT (แก้ไขปัญหา Schema Cache)</h4>
+                    <h4 className="text-[10px] uppercase tracking-widest">SQL Repair Tool (คัดลอกไปวางใน Supabase SQL Editor)</h4>
                  </div>
                  <pre className="text-[9px] font-mono text-emerald-500 bg-black/40 p-6 rounded-2xl overflow-x-auto border border-emerald-500/20 leading-relaxed">
                     {fixSql}
                  </pre>
                  <div className="bg-emerald-500/10 p-5 rounded-2xl border border-emerald-500/20">
-                    <p className="text-[9px] font-bold text-emerald-400 italic">
-                       * วิธีแก้ไข: คัดลอกโค้ดด้านบนทั้งหมด ไปวางในช่อง SQL Editor ของ Supabase แล้วกดปุ่ม Run เพื่อเพิ่ม Column ที่ขาดหายไป จากนั้นรีเฟรชหน้านี้ครับ
+                    <p className="text-[9px] text-emerald-400 italic leading-relaxed">
+                       * วิธีแก้ไข Error UUID: คัดลอกโค้ดด้านบนทั้งหมดไปวางใน Supabase SQL Editor แล้วกดปุ่ม Run เพื่อลบและสร้างตารางใหม่ด้วยประเภท TEXT สำหรับ ID ทั้งหมดครับ (ข้อมูลเดิมจะถูกลบ)
                     </p>
                  </div>
               </div>

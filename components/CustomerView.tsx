@@ -26,6 +26,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustom
     loyalty_points: 0
   });
 
+  const generateNumericId = () => {
+    return Date.now().toString() + Math.floor(Math.random() * 100).toString().padStart(2, '0');
+  };
+
   const fetchCustomers = async () => {
     const { data, error } = await supabase.from('customers').select('*').order('name');
     if (!error && data) setCustomers(data);
@@ -39,13 +43,15 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, setCustom
 
     setIsSaving(true);
     const customerData = {
+      id: editingCustomer?.id || generateNumericId(),
       name: formData.name,
       phone: formData.phone,
       email: formData.email,
       province: formData.province,
       address: formData.address,
-      type: formData.type,
-      company_id: 'c1' // Multi-tenant ID
+      type: formData.type || 'INDIVIDUAL',
+      loyalty_points: formData.loyalty_points || 0,
+      company_id: '1001' 
     };
 
     const { error } = editingCustomer 

@@ -82,16 +82,17 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
     let finalCustomerId = formData.customer_id;
 
     if (showNewCustomerForm) {
+      const newCustId = generateNumericId();
       const { data: newCust, error: custErr } = await supabase
         .from('customers')
         .insert([{ 
-          id: generateNumericId(),
+          id: newCustId,
           name: newCustomerData.name, 
           phone: newCustomerData.phone, 
           address: newCustomerData.address,
           province: newCustomerData.province,
-          company_id: 'c1',
-          type: 'INDIVIDUAL' // Explicitly set for schema consistency
+          company_id: '1001',
+          type: 'INDIVIDUAL'
         }])
         .select()
         .single();
@@ -101,7 +102,7 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
         setIsSaving(false);
         return;
       }
-      finalCustomerId = newCust.id;
+      finalCustomerId = newCustId;
       await fetchCustomers();
     }
 
@@ -114,7 +115,7 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
       issue_description: formData.issue_description,
       labor_cost: formData.labor_cost,
       total_amount: formData.total_amount,
-      company_id: 'c1'
+      company_id: '1001'
     };
 
     const { error } = selectedOrder 

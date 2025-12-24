@@ -21,7 +21,7 @@ export enum WorkOrderStatus {
 }
 
 export interface Company {
-  id: string; // Numeric ID String
+  id: string; 
   name: string;
   logo: string;
   tax_id: string;
@@ -32,7 +32,7 @@ export interface Company {
 }
 
 export interface User {
-  id: string; // Numeric ID String
+  id: string;
   company_id: string;
   name: string;
   email: string;
@@ -41,7 +41,7 @@ export interface User {
 }
 
 export interface Customer {
-  id: string; // Numeric ID String
+  id: string;
   company_id: string;
   name: string;
   phone: string;
@@ -53,7 +53,7 @@ export interface Customer {
 }
 
 export interface Vehicle {
-  id: string; // Numeric ID String
+  id: string;
   customer_id: string;
   brand: string;
   model: string;
@@ -65,7 +65,7 @@ export interface Vehicle {
 }
 
 export interface Part {
-  id: string; // Numeric ID String
+  id: string;
   company_id: string;
   sku: string;
   name: string;
@@ -78,7 +78,7 @@ export interface Part {
 }
 
 export interface WorkOrder {
-  id: string; // Numeric ID String
+  id: string;
   orderNumber: string;
   company_id: string;
   vehicle_id: string;
