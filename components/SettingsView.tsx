@@ -1,12 +1,12 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Save, Camera, X, RefreshCw, ShieldCheck, AlertCircle, FileCode, CheckCircle2, 
   Settings as SettingsIcon, BellRing, User as UserIcon, LogOut, Link, Copy, Database,
-  Building2, MapPin, Hash, Briefcase
+  Building2, MapPin, Hash, Briefcase, UserPlus, Trash2, Edit3, Mail, ShieldAlert
 } from 'lucide-react';
 import { Company, User, UserRole } from '../types';
 import { supabase } from '../services/supabaseClient';
+import { generateUUID } from '../constants';
 
 interface SettingsViewProps {
   currentUser: User;
@@ -16,7 +16,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurrentUser, currentCompany, setCurrentCompany }) => {
-  const [activeTab, setActiveTab] = useState<'PROFILE' | 'COMPANY' | 'INTEGRATION' | 'HEALTH'>('PROFILE');
+  const [activeTab, setActiveTab] = useState<'PROFILE' | 'COMPANY' | 'USERS' | 'INTEGRATION' | 'HEALTH'>('PROFILE');
   const [userForm, setUserForm] = useState<User>(currentUser);
   const [companyForm, setCompanyForm] = useState<Company>(currentCompany);
   const [lineConfig, setLineConfig] = useState({
@@ -28,8 +28,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, setCurr
   const [isChecking, setIsChecking] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // User Management State
+  const [users, setUsers] = useState<User[]>([]);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUserAccount, setEditingUserAccount] = useState<Partial<User> | null>(null);
+  
   const userFileRef = useRef<HTMLInputElement>(null);
   const companyFileRef = useRef<HTMLInputElement>(null);
+
+  const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.OWNER;
 
   const repairSql = `-- 🛠️ I-MOTOR SQL REPAIR SCRIPT 🛠️
 -- กรุณารันโค้ดทั้งหมดนี้ใน Supabase SQL Editor เพื่อแก้ไข Error และคอลัมน์ที่หายไป
@@ -60,8 +67,15 @@ NOTIFY pgrst, 'reload schema';`;
   useEffect(() => {
     if (activeTab === 'INTEGRATION') {
       fetchLineConfig();
+    } else if (activeTab === 'USERS' && isAdmin) {
+      fetchUsers();
     }
   }, [activeTab]);
+
+  const fetchUsers = async () => {
+    const { data } = await supabase.from('users').select('*').eq('company_id', currentCompany.id).order('name');
+    if (data) setUsers(data);
+  };
 
   const fetchLineConfig = async () => {
     const { data } = await supabase.from('system_config').select('*');
@@ -186,11 +200,51 @@ NOTIFY pgrst, 'reload schema';`;
     alert("คัดลอก SQL Script เรียบร้อยแล้ว!");
   };
 
+  // User Management Actions
+  const handleSaveUserAccount = async () => {
+    if (!editingUserAccount?.name || !editingUserAccount?.email) {
+      alert("กรุณาระบุชื่อและอีเมล");
+      return;
+    }
+    setIsSaving(true);
+    const payload = {
+      name: editingUserAccount.name,
+      email: editingUserAccount.email,
+      role: editingUserAccount.role || UserRole.MECHANIC,
+      company_id: currentCompany.id,
+      avatar: editingUserAccount.avatar || `https://ui-avatars.com/api/?name=${editingUserAccount.name}&background=random`
+    };
+
+    const { error } = editingUserAccount.id 
+      ? await supabase.from('users').update(payload).eq('id', editingUserAccount.id)
+      : await supabase.from('users').insert([{ ...payload, id: generateUUID() }]);
+
+    if (error) {
+      alert("Error saving user: " + error.message);
+    } else {
+      await fetchUsers();
+      setIsUserModalOpen(false);
+    }
+    setIsSaving(false);
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (id === currentUser.id) {
+      alert("ไม่สามารถลบบัญชีที่คุณกำลังใช้งานอยู่ได้");
+      return;
+    }
+    if (!confirm("ยืนยันการลบผู้ใช้งานนี้? สิทธิ์การเข้าถึงระบบจะถูกยกเลิกทันที")) return;
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (!error) await fetchUsers();
+    else alert("Error: " + error.message);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in pb-24">
       <div className="flex bg-white p-1.5 rounded-3xl border border-slate-100 shadow-sm overflow-x-auto scrollbar-hide">
         <button onClick={() => setActiveTab('PROFILE')} className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'PROFILE' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>โปรไฟล์</button>
         <button onClick={() => setActiveTab('COMPANY')} className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'COMPANY' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>บริษัท</button>
+        {isAdmin && <button onClick={() => setActiveTab('USERS')} className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'USERS' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>ผู้ใช้งาน</button>}
         <button onClick={() => setActiveTab('INTEGRATION')} className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'INTEGRATION' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>การเชื่อมต่อ</button>
         <button onClick={() => setActiveTab('HEALTH')} className={`flex-1 py-4 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'HEALTH' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>ระบบตรวจสอบ</button>
       </div>
@@ -289,6 +343,60 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       )}
 
+      {activeTab === 'USERS' && isAdmin && (
+        <div className="space-y-8 animate-in">
+           <div className="flex items-center justify-between">
+              <div>
+                 <h3 className="text-xl font-black uppercase italic tracking-tighter">การจัดการผู้ใช้งาน</h3>
+                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">User & Role-Based Access Control</p>
+              </div>
+              <button onClick={() => { setEditingUserAccount({ role: UserRole.MECHANIC }); setIsUserModalOpen(true); }} className="h-12 px-6 bg-slate-900 text-white rounded-2xl font-black text-[9px] uppercase tracking-widest flex items-center gap-2 shadow-lg active:scale-95 transition-all">
+                 <UserPlus size={16}/> เพิ่มพนักงาน
+              </button>
+           </div>
+
+           <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                 <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                    <tr>
+                       <th className="px-10 py-5">ชื่อพนักงาน</th>
+                       <th className="px-10 py-5">อีเมล</th>
+                       <th className="px-10 py-5 text-center">สิทธิ์การใช้งาน</th>
+                       <th className="px-10 py-5 text-right">จัดการ</th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-50">
+                    {users.map(u => (
+                       <tr key={u.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="px-10 py-6">
+                             <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                                   <img src={u.avatar} className="w-full h-full object-cover" />
+                                </div>
+                                <span className="font-black text-xs uppercase text-slate-900">{u.name}</span>
+                             </div>
+                          </td>
+                          <td className="px-10 py-6 text-xs text-slate-400">{u.email}</td>
+                          <td className="px-10 py-6 text-center">
+                             <span className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase ${
+                                u.role === UserRole.ADMIN || u.role === UserRole.OWNER ? 'bg-indigo-50 text-indigo-600' :
+                                u.role === UserRole.MECHANIC ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'
+                             }`}>
+                                {u.role}
+                             </span>
+                          </td>
+                          <td className="px-10 py-6 text-right space-x-2">
+                             <button onClick={() => { setEditingUserAccount(u); setIsUserModalOpen(true); }} className="p-2 text-slate-300 hover:text-blue-500 transition-colors"><Edit3 size={16}/></button>
+                             <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-slate-200 hover:text-rose-500 transition-colors"><Trash2 size={16}/></button>
+                          </td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+        </div>
+      )}
+
       {activeTab === 'INTEGRATION' && (
         <div className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-10">
            <div>
@@ -369,6 +477,59 @@ NOTIFY pgrst, 'reload schema';`;
                  <pre className="bg-black/40 p-8 rounded-[32px] text-[11px] font-mono text-blue-300 overflow-x-auto whitespace-pre-wrap leading-relaxed border border-white/5 shadow-inner">
                     {repairSql}
                  </pre>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* User Management Modal */}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[300] flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl animate-in zoom-in-95 overflow-hidden">
+              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                 <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingUserAccount?.id ? 'แก้ไขสิทธิ์พนักงาน' : 'เพิ่มพนักงานใหม่'}</h3>
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">Access Rights & Permissions</p>
+                 </div>
+                 <button onClick={() => setIsUserModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-all"><X size={24}/></button>
+              </div>
+              <div className="p-10 space-y-6">
+                 <div className="space-y-4">
+                    <div className="space-y-1">
+                       <label className="text-[9px] uppercase tracking-widest text-slate-400 ml-1">ชื่อ-นามสกุล</label>
+                       <div className="relative">
+                          <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                          <input type="text" placeholder="ระบุชื่อพนักงาน..." value={editingUserAccount?.name || ''} onChange={e => setEditingUserAccount({...editingUserAccount, name: e.target.value})} className="w-full h-14 pl-14 pr-6 bg-slate-50 rounded-2xl text-xs font-black outline-none border border-transparent focus:border-blue-500/20" />
+                       </div>
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] uppercase tracking-widest text-slate-400 ml-1">อีเมลพนักงาน</label>
+                       <div className="relative">
+                          <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                          <input type="email" placeholder="example@i-motor.th" value={editingUserAccount?.email || ''} onChange={e => setEditingUserAccount({...editingUserAccount, email: e.target.value})} className="w-full h-14 pl-14 pr-6 bg-slate-50 rounded-2xl text-xs font-black outline-none border border-transparent focus:border-blue-500/20" />
+                       </div>
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] uppercase tracking-widest text-blue-500 ml-1">สิทธิ์การเข้าใช้งาน (Role)</label>
+                       <div className="relative">
+                          <ShieldCheck className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-400" size={18}/>
+                          <select value={editingUserAccount?.role || UserRole.MECHANIC} onChange={e => setEditingUserAccount({...editingUserAccount, role: e.target.value as UserRole})} className="w-full h-14 pl-14 pr-6 bg-blue-50/50 text-blue-600 rounded-2xl text-xs font-black outline-none border border-blue-100">
+                             {Object.values(UserRole).map(role => <option key={role} value={role}>{role}</option>)}
+                          </select>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+                    <ShieldAlert className="text-amber-500 shrink-0" size={20}/>
+                    <p className="text-[9px] text-amber-700 font-bold leading-relaxed uppercase">
+                       ระวัง: การเปลี่ยนสิทธิ์พนักงานจะมีผลทันที พนักงานจะต้อง Re-login เพื่อรับสิทธิ์ใหม่ตาม Role ที่กำหนด
+                    </p>
+                 </div>
+
+                 <button onClick={handleSaveUserAccount} disabled={isSaving} className="w-full py-5 bg-slate-900 text-white rounded-2xl uppercase tracking-widest text-[10px] font-black shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                    {isSaving ? "Saving..." : <><Save size={18}/> ยืนยันข้อมูลพนักงาน</>}
+                 </button>
               </div>
            </div>
         </div>
