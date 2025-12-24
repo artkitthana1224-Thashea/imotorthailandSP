@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -8,7 +9,6 @@ import { VehicleView } from './components/VehicleView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { BillingView } from './components/BillingView';
-import { StaffView } from './components/StaffView';
 import { MOCK_COMPANIES, MOCK_USERS } from './constants';
 import { WorkOrder, Customer, Part, Company, User, Vehicle } from './types';
 import { supabase } from './services/supabaseClient';
@@ -35,16 +35,19 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
 
+    // Initial timeout to prevent hanging UI
     const timeoutId = setTimeout(() => {
       setLoading(false);
     }, 6000);
 
     try {
+      // Fetch data sequentially or in parallel depending on criticality
       const compRes = await supabase.from('companies').select('*').limit(1);
       if (compRes.data && compRes.data.length > 0) {
         setCurrentCompany(compRes.data[0]);
       }
 
+      // Parallel secondary fetches
       const [vRes, cRes, pRes, wRes] = await Promise.all([
         supabase.from('vehicles').select('*').limit(50),
         supabase.from('customers').select('*').order('name').limit(50),
@@ -71,6 +74,7 @@ const App: React.FC = () => {
       clearTimeout(timeoutId);
     } catch (err: any) {
       console.warn("Non-critical data fetch issue:", err);
+      // We don't block the whole app for non-critical errors
     } finally {
       setLoading(false);
     }
@@ -94,7 +98,6 @@ const App: React.FC = () => {
       case 'inventory': return <InventoryView parts={parts} setParts={setParts} currentCompany={currentCompany} />;
       case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} currentCompany={currentCompany} />;
       case 'vehicles': return <VehicleView vehicles={vehicles} setVehicles={setVehicles} workOrders={workOrders} currentCompany={currentCompany} />;
-      case 'staff': return <StaffView currentCompany={currentCompany} currentUser={currentUser} />;
       case 'billing': return <BillingView currentCompany={currentCompany} />;
       case 'reports': return <ReportsView />;
       case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
