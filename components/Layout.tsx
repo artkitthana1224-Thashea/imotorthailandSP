@@ -90,8 +90,8 @@ export const Layout: React.FC<LayoutProps> = ({
                 <p className="text-[10px] text-slate-900 dark:text-white uppercase leading-none">{currentUser.name}</p>
                 <p className="text-[7px] text-blue-500 uppercase mt-1 tracking-widest">{currentUser.role}</p>
              </div>
-             <div className="w-10 h-10 rounded-2xl overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100">
-                <img src={currentUser.avatar} className="w-full h-full object-cover" />
+             <div className="w-10 h-10 rounded-2xl overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100 bg-slate-100">
+                <img src={currentUser.avatar} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${currentUser.name}&background=random` }} />
              </div>
           </div>
         </header>
@@ -100,13 +100,26 @@ export const Layout: React.FC<LayoutProps> = ({
           {children}
         </main>
 
-        {/* Smart Mobile Navigation */}
-        <div className={`md:hidden fixed bottom-6 left-6 right-6 h-16 bg-slate-900/95 backdrop-blur-xl shadow-2xl rounded-[28px] flex items-center justify-around px-4 z-50 border border-white/10 transition-all duration-500 ${isMobileNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}>
+        {/* Premium Mobile Navigation */}
+        <div className={`md:hidden fixed bottom-6 left-6 right-6 h-18 bg-blue-50/80 backdrop-blur-xl shadow-[0_20px_50px_-15px_rgba(37,99,235,0.3)] rounded-[32px] flex items-center justify-around px-2 z-50 border border-white/40 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMobileNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}>
           {menuItems.slice(0, 5).map((item) => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`p-3 rounded-2xl transition-all ${activeTab === item.id ? 'bg-blue-600 text-white scale-110 shadow-lg' : 'text-slate-400 opacity-60'}`}>
+            <button 
+              key={item.id} 
+              onClick={() => setActiveTab(item.id)} 
+              className={`p-4 rounded-[24px] transition-all duration-300 relative ${activeTab === item.id ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70 hover:opacity-100'}`}
+            >
               {item.icon}
+              {activeTab === item.id && (
+                <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+              )}
             </button>
           ))}
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`p-4 rounded-[24px] transition-all duration-300 ${activeTab === 'settings' ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70'}`}
+          >
+            <Settings size={20} />
+          </button>
         </div>
       </div>
     </div>

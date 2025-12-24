@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, Search, Wrench, Clock, CheckCircle2, X, ChevronRight, 
-  Activity, Calendar, Package, MapPin, Phone, User, Save, UserPlus
+  Activity, Calendar, Package, MapPin, Phone, User, Save, UserPlus, AlertCircle
 } from 'lucide-react';
 import { WorkOrder, WorkOrderStatus, Vehicle, Part, Customer } from '../types';
 import { sendWorkOrderNotification } from '../services/lineService';
@@ -21,6 +21,7 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
   const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<Partial<WorkOrder>>({
     orderNumber: '',
@@ -79,6 +80,7 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
     }
 
     setIsSaving(true);
+    setNotificationError(null);
     let finalCustomerId = formData.customer_id;
 
     if (showNewCustomerForm) {
@@ -129,13 +131,21 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
       setIsModalOpen(false);
       
       const cust = customers.find(c => c.id === finalCustomerId) || newCustomerData;
-      await sendWorkOrderNotification({
-        orderNumber: formData.orderNumber,
-        status: formData.status,
+      
+      // Send notification (Async, doesn't block UI)
+      const notifyResult = await sendWorkOrderNotification({
+        orderNumber: formData.orderNumber || '',
+        status: formData.status || 'PENDING',
         customerName: cust.name,
-        issue: formData.issue_description,
-        creator: 'Admin'
+        issue: formData.issue_description || 'ไม่มีรายละเอียด',
+        creator: 'Admin',
+        isUpdate: !!selectedOrder
       });
+
+      if (!notifyResult.success && notifyResult.error !== 'CONFIG_MISSING') {
+        console.warn("Notification failed but order was saved.");
+        setNotificationError(notifyResult.error || "แจ้งเตือน LINE ล้มเหลว");
+      }
     }
     setIsSaving(false);
   };
@@ -150,24 +160,32 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
 
   return (
     <div className="space-y-8 animate-in duration-700 pb-24">
+      {notificationError && (
+        <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-600 animate-in">
+           <AlertCircle size={20}/>
+           <p className="text-[10px] font-black uppercase tracking-widest">{notificationError}</p>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
            <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">ศูนย์ซ่อม <span className="text-blue-600">Workshop</span></h1>
-           <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">การจัดการใบงานแบบ Real-time (Supabase Sync)</p>
+           <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Enterprise Repair Workflow Management</p>
         </div>
         <button onClick={() => { 
           setFormData({ orderNumber: `WO-${new Date().getFullYear().toString().slice(-2)}${Date.now().toString().slice(-6)}`, status: WorkOrderStatus.PENDING, labor_cost: 500, total_amount: 500, customer_id: '' }); 
           setSelectedOrder(null); 
           setShowNewCustomerForm(false);
           setIsModalOpen(true); 
-        }} className="h-12 px-8 bg-slate-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all">
+          setNotificationError(null);
+        }} className="h-12 px-8 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all">
           + เปิดใบงานใหม่
         </button>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
          {['ทั้งหมด', WorkOrderStatus.PENDING, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.COMPLETED].map(status => (
-           <button key={status} onClick={() => setSelectedStatus(status)} className={`flex-1 min-w-[120px] p-5 rounded-[32px] border transition-all text-center ${selectedStatus === status ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-400'}`}>
+           <button key={status} onClick={() => setSelectedStatus(status)} className={`flex-1 min-w-[120px] p-5 rounded-[32px] border transition-all text-center ${selectedStatus === status ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}>
               <p className="text-[10px] font-black uppercase tracking-widest">{status === 'ทั้งหมด' ? 'งานทั้งหมด' : status}</p>
            </button>
          ))}
@@ -213,7 +231,7 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl animate-in overflow-hidden flex flex-col">
               <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                 <h3 className="text-xl font-black uppercase italic tracking-tighter">Work Order Detail</h3>
+                 <h3 className="text-xl font-black uppercase italic tracking-tighter">{selectedOrder ? 'Update Work Order' : 'Create Work Order'}</h3>
                  <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-xl"><X size={24}/></button>
               </div>
               
@@ -221,51 +239,54 @@ export const WorkOrderView: React.FC<WorkOrderViewProps> = ({ workOrders, setWor
                  <div className="space-y-4">
                     <div className="flex justify-between items-end">
                        <label className="text-[10px] font-black uppercase text-slate-400">ข้อมูลลูกค้า</label>
-                       <button onClick={() => setShowNewCustomerForm(!showNewCustomerForm)} className="text-[9px] font-black uppercase text-blue-600 flex items-center gap-1">
-                          {showNewCustomerForm ? "- เลือกจากรายชื่อเดิม" : "+ เพิ่มลูกค้าใหม่"}
-                       </button>
+                       {!selectedOrder && (
+                         <button onClick={() => setShowNewCustomerForm(!showNewCustomerForm)} className="text-[9px] font-black uppercase text-blue-600 flex items-center gap-1">
+                            {showNewCustomerForm ? "- เลือกจากรายชื่อเดิม" : "+ เพิ่มลูกค้าใหม่"}
+                         </button>
+                       )}
                     </div>
 
                     {!showNewCustomerForm ? (
                       <select 
                         value={formData.customer_id} 
+                        disabled={!!selectedOrder}
                         onChange={e => setFormData({...formData, customer_id: e.target.value})}
-                        className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none"
+                        className={`w-full h-14 px-6 rounded-2xl font-black text-xs outline-none ${selectedOrder ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-50 focus:ring-2 focus:ring-blue-500/20'}`}
                       >
                         <option value="">-- ค้นหารายชื่อลูกค้า --</option>
                         {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
                       </select>
                     ) : (
                       <div className="grid grid-cols-2 gap-4 animate-in">
-                        <input type="text" placeholder="ชื่อ-นามสกุล" value={newCustomerData.name} onChange={e => setNewCustomerData({...newCustomerData, name: e.target.value})} className="px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs outline-none" />
-                        <input type="text" placeholder="เบอร์โทรศัพท์" value={newCustomerData.phone} onChange={e => setNewCustomerData({...newCustomerData, phone: e.target.value})} className="px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs outline-none" />
-                        <input type="text" placeholder="ที่อยู่" value={newCustomerData.address} onChange={e => setNewCustomerData({...newCustomerData, address: e.target.value})} className="col-span-2 px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs outline-none" />
+                        <input type="text" placeholder="ชื่อ-นามสกุล" value={newCustomerData.name} onChange={e => setNewCustomerData({...newCustomerData, name: e.target.value})} className="px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs font-black outline-none" />
+                        <input type="text" placeholder="เบอร์โทรศัพท์" value={newCustomerData.phone} onChange={e => setNewCustomerData({...newCustomerData, phone: e.target.value})} className="px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs font-black outline-none" />
+                        <input type="text" placeholder="ที่อยู่" value={newCustomerData.address} onChange={e => setNewCustomerData({...newCustomerData, address: e.target.value})} className="col-span-2 px-6 py-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs font-black outline-none" />
                       </div>
                     )}
                  </div>
 
                  <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-400">อาการเสียที่ระบุ</label>
-                    <textarea value={formData.issue_description} onChange={e => setFormData({...formData, issue_description: e.target.value})} className="w-full px-6 py-4 bg-slate-50 rounded-2xl h-24 text-xs font-black outline-none" placeholder="ระบุอาการ..." />
+                    <textarea value={formData.issue_description} onChange={e => setFormData({...formData, issue_description: e.target.value})} className="w-full px-6 py-4 bg-slate-50 rounded-2xl h-24 text-xs font-black outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="ระบุอาการ..." />
                  </div>
 
                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase text-slate-400">สถานะงาน</label>
-                       <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full h-14 px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase">
+                       <label className="text-[10px] font-black uppercase text-slate-400">สถานะงานซ่อม</label>
+                       <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full h-14 px-6 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-slate-200">
                           {Object.values(WorkOrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
                        </select>
                     </div>
                     <div className="space-y-2 text-right">
                        <label className="text-[10px] font-black uppercase text-slate-400">ยอดรวมค่าบริการ (฿)</label>
-                       <input type="number" value={formData.total_amount} onChange={e => setFormData({...formData, total_amount: Number(e.target.value)})} className="w-full h-14 px-6 bg-blue-50 text-blue-600 rounded-2xl font-black text-xl text-right outline-none" />
+                       <input type="number" value={formData.total_amount} onChange={e => setFormData({...formData, total_amount: Number(e.target.value)})} className="w-full h-14 px-6 bg-blue-50 text-blue-600 rounded-2xl font-black text-xl text-right outline-none focus:ring-2 focus:ring-blue-500/20" />
                     </div>
                  </div>
               </div>
 
               <div className="p-8 bg-slate-50 flex justify-end gap-4">
-                 <button onClick={handleSaveOrder} disabled={isSaving} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3">
-                    {isSaving ? "Processing..." : <><Save size={16}/> บันทึกใบงาน</>}
+                 <button onClick={handleSaveOrder} disabled={isSaving} className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 active:scale-95 transition-all">
+                    {isSaving ? "Processing..." : <><Save size={16}/> {selectedOrder ? 'บันทึกการแก้ไข' : 'เปิดใบงาน'}</>}
                  </button>
               </div>
            </div>

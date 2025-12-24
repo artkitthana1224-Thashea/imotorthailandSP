@@ -12,6 +12,7 @@ import { BillingView } from './components/BillingView';
 import { MOCK_COMPANIES, MOCK_USERS } from './constants';
 import { WorkOrder, Customer, Part, Company, User, Vehicle } from './types';
 import { supabase } from './services/supabaseClient';
+import { AlertCircle, RefreshCcw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -19,12 +20,12 @@ const App: React.FC = () => {
   const [currentCompany, setCurrentCompany] = useState<Company>(MOCK_COMPANIES[0]);
   const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]);
   
-  // Data State (Will be populated by Supabase)
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAllData();
@@ -32,6 +33,7 @@ const App: React.FC = () => {
 
   const fetchAllData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [vRes, woRes, cRes, pRes] = await Promise.all([
         supabase.from('vehicles').select('*'),
@@ -40,12 +42,25 @@ const App: React.FC = () => {
         supabase.from('parts').select('*')
       ]);
 
+      const firstError = vRes.error || woRes.error || cRes.error || pRes.error;
+      
+      if (firstError) {
+        console.error("Database initialization error:", firstError.message || firstError);
+        
+        // Check if error implies missing tables
+        const msg = firstError.message?.toLowerCase() || "";
+        if (msg.includes("does not exist") || msg.includes("relation") || msg.includes("not found")) {
+          setError("DATABASE_NOT_READY");
+        } else {
+          setError(firstError.message || "Unknown Connection Error");
+        }
+      }
+
       if (vRes.data) setVehicles(vRes.data);
       if (cRes.data) setCustomers(cRes.data);
       if (pRes.data) setParts(pRes.data);
       
       if (woRes.data) {
-        // Fix: Mapping snake_case from Supabase to correctly match the WorkOrder interface fields
         setWorkOrders(woRes.data.map((d: any) => ({
           ...d,
           orderNumber: d.order_number,
@@ -57,15 +72,61 @@ const App: React.FC = () => {
           created_at: d.created_at
         })));
       }
-    } catch (err) {
-      console.error("Supabase load error:", err);
+    } catch (err: any) {
+      console.error("Critical fetch error:", err);
+      setError(err.message || "Critical System Error");
     } finally {
       setLoading(false);
     }
   };
 
   const activeContent = useMemo(() => {
-    if (loading) return <div className="flex items-center justify-center h-64 font-black uppercase tracking-widest text-slate-400">Loading Database...</div>;
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 animate-pulse">
+           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Synchronizing Data...</p>
+        </div>
+      );
+    }
+
+    if (error === "DATABASE_NOT_READY") {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center p-10 space-y-6">
+           <div className="p-6 bg-amber-50 rounded-[40px] text-amber-600">
+              <AlertCircle size={48} />
+           </div>
+           <div>
+              <h2 className="text-xl font-black uppercase italic tracking-tighter">Database Setup Required</h2>
+              <p className="text-slate-500 text-xs mt-2 max-w-sm leading-relaxed">
+                 ไม่พบตารางในฐานข้อมูล หรือ Schema ไม่ถูกต้อง<br/>กรุณาไปที่เมนู <b>"ตั้งค่า"</b> > <b>"ระบบตรวจสอบ"</b><br/>เพื่อรัน SQL Repair Script ครับ
+              </p>
+           </div>
+           <button onClick={() => setActiveTab('settings')} className="px-10 py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+              ไปที่หน้าตั้งค่า
+           </button>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center p-10 space-y-6">
+           <div className="p-6 bg-rose-50 rounded-[40px] text-rose-600">
+              <AlertCircle size={48} />
+           </div>
+           <div>
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-rose-600">Connection Error</h2>
+              <p className="text-slate-500 text-xs mt-2 max-w-sm font-mono bg-slate-100 p-4 rounded-xl">
+                 {error}
+              </p>
+           </div>
+           <button onClick={() => fetchAllData()} className="px-10 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-3">
+              <RefreshCcw size={16} /> ลองใหม่อีกครั้ง
+           </button>
+        </div>
+      );
+    }
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard setActiveTab={setActiveTab} />;
@@ -77,7 +138,7 @@ const App: React.FC = () => {
       case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
       default: return <Dashboard setActiveTab={setActiveTab} />;
     }
-  }, [activeTab, workOrders, vehicles, parts, customers, currentCompany, currentUser, loading]);
+  }, [activeTab, workOrders, vehicles, parts, customers, currentCompany, currentUser, loading, error]);
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -90,7 +151,6 @@ const App: React.FC = () => {
           currentCompany={currentCompany}
           isDarkMode={isDarkMode}
           toggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-          // Fix: Removed notifications and setNotifications which were causing the TypeScript error as they are not in LayoutProps
         >
           {activeContent}
         </Layout>
