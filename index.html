@@ -8,13 +8,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>I-MOTOR CENTRAL | Enterprise ERP</title>
+    <!-- Prevent ReferenceError: process is not defined -->
+    <script>
+      window.process = { env: { API_KEY: "" } };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         * { 
           -webkit-tap-highlight-color: transparent;
           box-sizing: border-box;
-          font-family: Arial, Helvetica, sans-serif !important;
-          font-weight: 400 !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
         }
         
         body { 
@@ -28,7 +31,6 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         input, select, textarea { 
           font-size: 16px !important; 
-          font-weight: 400 !important;
         }
         
         .animate-in { 
@@ -41,16 +43,6 @@
 
         #root {
           min-height: 100vh;
-        }
-
-        .loading-shimmer {
-          background: linear-gradient(90deg, #f1f5f9 25%, #f8fafc 50%, #f1f5f9 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.5s infinite;
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
         }
     </style>
 <script type="importmap">
