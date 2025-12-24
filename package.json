@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp _redirects dist/ || true",
+    "build": "vite build && cp _redirects dist/ 2>/dev/null || true",
     "preview": "vite preview"
   },
   "dependencies": {
