@@ -2,9 +2,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bike, ShieldCheck, Plus, Trash2, Edit3, X, Save, BatteryCharging,
-  Cpu, History, Camera, Search, ChevronRight, ExternalLink
+  Cpu, History, Camera, Search, ChevronRight, ExternalLink, Calendar, Wrench, Clock, CheckCircle2, AlertCircle
 } from 'lucide-react';
-import { Vehicle, WorkOrder, Customer, Company } from '../types';
+import { Vehicle, WorkOrder, Customer, Company, WorkOrderStatus } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface VehicleWithExtras extends Vehicle {
@@ -13,7 +13,6 @@ interface VehicleWithExtras extends Vehicle {
   image?: string;
 }
 
-// Added currentCompany to VehicleViewProps to fix type error in App.tsx
 interface VehicleViewProps {
   vehicles: VehicleWithExtras[];
   setVehicles: React.Dispatch<React.SetStateAction<VehicleWithExtras[]>>;
@@ -21,7 +20,6 @@ interface VehicleViewProps {
   currentCompany: Company;
 }
 
-// Updated component signature to accept currentCompany
 export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles, workOrders, currentCompany }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyModalVehicle, setHistoryModalVehicle] = useState<VehicleWithExtras | null>(null);
@@ -30,7 +28,6 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
   const [customers, setCustomers] = useState<Customer[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Fixed property names to match snake_case interface
   const [formData, setFormData] = useState<Partial<VehicleWithExtras>>({
     brand: 'I-Motor',
     model: 'Vapor CBS',
@@ -59,7 +56,6 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
   };
 
   const handleAddOrEdit = async () => {
-    // Fixed from customerId to customer_id
     if (!formData.vin || !formData.customer_id) {
       alert("กรุณากรอก VIN และเลือกลูกเจ้าของรถ");
       return;
@@ -73,7 +69,7 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
       battery_type: formData.battery_type,
       motor_power: formData.motor_power,
       warranty_until: formData.warranty_until,
-      // mapping extra fields if needed or storing in a metadata column
+      company_id: currentCompany.id
     };
 
     const { error } = editingVehicle 
@@ -88,7 +84,6 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
     }
   };
 
-  // Fixed: Implemented missing handleDeleteVehicle function to handle vehicle deletion from Supabase
   const handleDeleteVehicle = async (id: string) => {
     if (!confirm("ยืนยันการลบข้อมูลรถคันนี้?")) return;
     const { error } = await supabase.from('vehicles').delete().eq('id', id);
@@ -102,7 +97,6 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingVehicle(null);
-    // Fixed property names to match snake_case interface
     setFormData({ brand: 'I-Motor', model: 'Vapor CBS', vin: '', customer_id: '', battery_type: 'Lithium 72V', motor_power: '3000W', color: 'Onyx Black', charger: '8A', image: '' });
   };
 
@@ -121,6 +115,21 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
     v.vin.toLowerCase().includes(searchTerm.toLowerCase()) || 
     v.model.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getVehicleHistory = (vehicleId: string) => {
+    return workOrders.filter(wo => wo.vehicle_id === vehicleId).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  };
+
+  const getStatusIcon = (status: WorkOrderStatus) => {
+    switch (status) {
+      case WorkOrderStatus.COMPLETED: return <CheckCircle2 size={16} className="text-emerald-500" />;
+      case WorkOrderStatus.CANCELLED: return <X size={16} className="text-rose-500" />;
+      case WorkOrderStatus.WAITING_PARTS: return <AlertCircle size={16} className="text-amber-500" />;
+      default: return <Clock size={16} className="text-blue-500" />;
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-24">
@@ -162,7 +171,6 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
               </thead>
               <tbody className="divide-y divide-slate-50">
                  {filteredVehicles.map((v) => {
-                    // Corrected from customerId to customer_id
                     const owner = customers.find(c => c.id === v.customer_id);
                     return (
                       <tr key={v.id} className="hover:bg-blue-50/30 transition-all group">
@@ -176,16 +184,22 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
                          <td className="px-8 py-6">
                             <div className="flex items-center gap-3 text-slate-500">
                                <Cpu size={14} className="text-indigo-500" />
-                               {/* Fixed property names to match snake_case interface */}
                                <span className="text-[10px] font-bold">{v.motor_power || '3000W'}</span>
                                <BatteryCharging size={14} className="text-emerald-500 ml-2" />
                                <span className="text-[10px] font-bold">{v.battery_type || '72V'}</span>
                             </div>
                          </td>
                          <td className="px-8 py-6 font-black text-xs">{owner?.name || 'ไม่ระบุเจ้าของ'}</td>
-                         <td className="px-8 py-6 text-right space-x-2">
-                            <button onClick={() => { setEditingVehicle(v); setFormData(v); setIsModalOpen(true); }} className="p-3 text-slate-300 hover:text-blue-600"><Edit3 size={16}/></button>
-                            <button onClick={() => handleDeleteVehicle(v.id)} className="p-3 text-slate-200 hover:text-rose-600"><Trash2 size={16}/></button>
+                         <td className="px-8 py-6 text-right space-x-1">
+                            <button 
+                              onClick={() => setHistoryModalVehicle(v)}
+                              className="p-3 text-slate-300 hover:text-indigo-600 transition-colors"
+                              title="ดูประวัติการซ่อม"
+                            >
+                              <History size={16}/>
+                            </button>
+                            <button onClick={() => { setEditingVehicle(v); setFormData(v); setIsModalOpen(true); }} className="p-3 text-slate-300 hover:text-blue-600 transition-colors"><Edit3 size={16}/></button>
+                            <button onClick={() => handleDeleteVehicle(v.id)} className="p-3 text-slate-200 hover:text-rose-600 transition-colors"><Trash2 size={16}/></button>
                          </td>
                       </tr>
                     );
@@ -195,18 +209,97 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
         </div>
       </div>
 
+      {/* History Modal */}
+      {historyModalVehicle && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[150] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
+               <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <History size={24} className="text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">ประวัติงานซ่อม <span className="text-blue-400">{historyModalVehicle.model}</span></h3>
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-1">VIN: {historyModalVehicle.vin}</p>
+                  </div>
+               </div>
+               <button onClick={() => setHistoryModalVehicle(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all text-white"><X size={24}/></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/50">
+              {getVehicleHistory(historyModalVehicle.id).length > 0 ? (
+                <div className="space-y-4 relative before:absolute before:left-[19px] before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-200">
+                  {getVehicleHistory(historyModalVehicle.id).map((wo, idx) => (
+                    <div key={wo.id} className="relative pl-12">
+                      {/* Timeline dot */}
+                      <div className="absolute left-0 top-1.5 w-10 h-10 rounded-2xl bg-white border-2 border-slate-100 shadow-sm flex items-center justify-center z-10">
+                        {getStatusIcon(wo.status)}
+                      </div>
+                      
+                      <div className="bg-white p-6 rounded-[28px] border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex justify-between items-start mb-3">
+                           <div>
+                              <p className="text-[12px] font-black uppercase text-slate-900">{wo.orderNumber || `WO-${wo.id.slice(0, 8).toUpperCase()}`}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Calendar size={12} className="text-slate-400" />
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">{new Date(wo.created_at).toLocaleDateString('th-TH')} - {new Date(wo.created_at).toLocaleTimeString('th-TH')}</p>
+                              </div>
+                           </div>
+                           <div className="text-right">
+                              <p className="text-sm font-black text-blue-600 italic">฿{wo.total_amount?.toLocaleString()}</p>
+                              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mt-1">{wo.status}</p>
+                           </div>
+                        </div>
+                        
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                           <div className="flex items-start gap-2 mb-2">
+                             <Wrench size={14} className="text-slate-400 mt-0.5" />
+                             <p className="text-[11px] font-bold text-slate-600 leading-relaxed">{wo.issue_description || 'ไม่มีรายละเอียดอาการเสีย'}</p>
+                           </div>
+                           {wo.parts_used && wo.parts_used.length > 0 && (
+                             <div className="flex flex-wrap gap-2 mt-2">
+                               {wo.parts_used.map((p, i) => (
+                                 <span key={i} className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[9px] font-black text-emerald-600 uppercase">
+                                   {p.name} x{p.quantity}
+                                 </span>
+                               ))}
+                             </div>
+                           )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-10 bg-white rounded-[40px] border border-dashed border-slate-200">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 opacity-50">
+                    <History size={32} className="text-slate-400" />
+                  </div>
+                  <p className="text-xs font-black uppercase text-slate-400 tracking-widest">ไม่พบประวัติการรับบริการ</p>
+                  <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase">รถคันนี้ยังไม่เคยมีใบงานซ่อมในระบบ</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-8 bg-white border-t border-slate-100 flex justify-center">
+               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-300">I-MOTOR SERVICE HISTORY LOG</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Entry Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden border border-white/20 animate-in zoom-in-95">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-               <h3 className="text-xl font-black uppercase italic tracking-tighter">ลงทะเบียนรถใหม่ <span className="text-blue-600">Vehicle Entry</span></h3>
+               <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingVehicle ? 'แก้ไขข้อมูลรถ' : 'ลงทะเบียนรถใหม่'} <span className="text-blue-600">Vehicle Entry</span></h3>
                <button onClick={closeModal} className="p-2 hover:bg-slate-200 rounded-xl transition-all"><X size={24}/></button>
             </div>
             <div className="p-10 space-y-6">
                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-400 ml-1">เลือกเจ้าของรถ</label>
-                  {/* Corrected from customerId to customer_id */}
-                  <select value={formData.customer_id} onChange={e => setFormData({...formData, customer_id: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none">
+                  <select value={formData.customer_id} onChange={e => setFormData({...formData, customer_id: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none focus:ring-2 focus:ring-blue-500/20">
                      <option value="">-- กรุณาเลือกลูกค้า --</option>
                      {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
                   </select>
@@ -224,19 +317,17 @@ export const VehicleView: React.FC<VehicleViewProps> = ({ vehicles, setVehicles,
                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1">สเปกแบตเตอรี่</label>
-                    {/* Corrected from batteryType to battery_type */}
                     <input type="text" value={formData.battery_type} onChange={e => setFormData({...formData, battery_type: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1">ประกันถึงวันที่</label>
-                    {/* Corrected from warrantyUntil to warranty_until */}
                     <input type="date" value={formData.warranty_until} onChange={e => setFormData({...formData, warranty_until: e.target.value})} className="w-full h-14 px-6 bg-slate-50 rounded-2xl font-black text-xs outline-none" />
                   </div>
                </div>
             </div>
             <div className="p-8 bg-slate-50 flex justify-end gap-4">
-               <button onClick={handleAddOrEdit} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-3">
-                  <Save size={18}/> บันทึกข้อมูลรถไปยัง Database
+               <button onClick={handleAddOrEdit} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
+                  <Save size={18}/> {editingVehicle ? 'อัปเดตข้อมูล' : 'บันทึกข้อมูลรถใหม่'}
                </button>
             </div>
           </div>
