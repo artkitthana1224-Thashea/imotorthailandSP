@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 // Initialize the GoogleGenAI client with the API Key from environment variables
@@ -7,7 +6,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // Get diagnostic advice from Gemini model
 export const getDiagnosticAdvice = async (issue: string, vehicleInfo: string) => {
   try {
-    // Upgraded to gemini-3-pro-preview for complex reasoning task as per guidelines
+    // Using gemini-3-pro-preview for complex reasoning task
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `System Diagnosis Request:
@@ -28,7 +27,6 @@ export const getDiagnosticAdvice = async (issue: string, vehicleInfo: string) =>
 // Analyze inventory data using Gemini model
 export const getInventorySummary = async (parts: any[]) => {
   try {
-    // Fix: Using snake_case properties from Part interface for correct filtering
     const lowStock = parts.filter(p => p.stock_level <= p.min_stock);
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
