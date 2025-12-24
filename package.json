@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp _redirects dist/ 2>/dev/null || true",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -25,10 +25,4 @@
   "engines": {
     "node": "18.x"
   }
-}
-
-"scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "preview": "vite preview"
 }
