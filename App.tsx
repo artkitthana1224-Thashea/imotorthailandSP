@@ -35,55 +35,46 @@ const App: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Set a maximum timeout for the initial load to prevent indefinite white screen
+    // Initial timeout to prevent hanging UI
     const timeoutId = setTimeout(() => {
-      if (loading) {
-        setLoading(false);
-        setError("DATA_FETCH_TIMEOUT");
-      }
-    }, 5000);
+      setLoading(false);
+    }, 6000);
 
     try {
-      // 1. Fetch Company First
-      const { data: compRes, error: compErr } = await supabase.from('companies').select('*').limit(1);
-      if (!compErr && compRes && compRes.length > 0) {
-        setCurrentCompany(compRes[0]);
+      // Fetch data sequentially or in parallel depending on criticality
+      const compRes = await supabase.from('companies').select('*').limit(1);
+      if (compRes.data && compRes.data.length > 0) {
+        setCurrentCompany(compRes.data[0]);
       }
 
-      // 2. Parallel Fetches
-      const results = await Promise.allSettled([
-        supabase.from('vehicles').select('*'),
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('parts').select('*'),
-        supabase.from('work_orders').select('*').order('created_at', { ascending: false })
+      // Parallel secondary fetches
+      const [vRes, cRes, pRes, wRes] = await Promise.all([
+        supabase.from('vehicles').select('*').limit(50),
+        supabase.from('customers').select('*').order('name').limit(50),
+        supabase.from('parts').select('*').limit(50),
+        supabase.from('work_orders').select('*').order('created_at', { ascending: false }).limit(50)
       ]);
 
-      results.forEach((result, idx) => {
-        if (result.status === 'fulfilled' && result.value.data) {
-          const data = result.value.data;
-          if (idx === 0) setVehicles(data);
-          if (idx === 1) setCustomers(data);
-          if (idx === 2) setParts(data);
-          if (idx === 3) {
-            setWorkOrders(data.map((d: any) => ({
-              ...d,
-              orderNumber: d.order_number || d.orderNumber,
-              customer_id: d.customer_id,
-              vehicle_id: d.vehicle_id,
-              issue_description: d.issue_description,
-              labor_cost: d.labor_cost,
-              total_amount: d.total_amount,
-              created_at: d.created_at
-            })));
-          }
-        }
-      });
-      
+      if (vRes.data) setVehicles(vRes.data);
+      if (cRes.data) setCustomers(cRes.data);
+      if (pRes.data) setParts(pRes.data);
+      if (wRes.data) {
+        setWorkOrders(wRes.data.map((d: any) => ({
+          ...d,
+          orderNumber: d.order_number || `WO-${d.id.slice(0, 5)}`,
+          customer_id: d.customer_id,
+          vehicle_id: d.vehicle_id,
+          issue_description: d.issue_description,
+          labor_cost: d.labor_cost || 0,
+          total_amount: d.total_amount || 0,
+          created_at: d.created_at
+        })));
+      }
+
       clearTimeout(timeoutId);
-      setError(null);
     } catch (err: any) {
-      console.error("Data fetch error:", err);
-      setError(err.message || "Failed to connect to backend");
+      console.warn("Non-critical data fetch issue:", err);
+      // We don't block the whole app for non-critical errors
     } finally {
       setLoading(false);
     }
@@ -92,23 +83,11 @@ const App: React.FC = () => {
   const activeContent = useMemo(() => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center h-[70vh] space-y-8">
-           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center justify-center h-[60vh] space-y-8">
+           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
            <div className="text-center">
-              <h3 className="text-sm font-black uppercase tracking-tighter text-slate-900">I-MOTOR CENTRAL</h3>
-              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-slate-400 mt-2">Loading System...</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 animate-pulse">Syncing Cloud Database...</p>
            </div>
-        </div>
-      );
-    }
-
-    if (error === "DATABASE_NOT_READY") {
-      return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-center p-10 space-y-6">
-           <Database size={48} className="text-amber-500" />
-           <h2 className="text-xl font-black uppercase">Database Setup Required</h2>
-           <p className="text-slate-500 text-xs max-w-sm">กรุณาไปที่หน้าตั้งค่าและรัน SQL Repair Script</p>
-           <button onClick={() => setActiveTab('settings')} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase">ไปหน้าตั้งค่า</button>
         </div>
       );
     }
@@ -124,7 +103,7 @@ const App: React.FC = () => {
       case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
       default: return <Dashboard setActiveTab={setActiveTab} />;
     }
-  }, [activeTab, workOrders, vehicles, parts, customers, currentCompany, currentUser, loading, error]);
+  }, [activeTab, workOrders, vehicles, parts, customers, currentCompany, currentUser, loading]);
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>

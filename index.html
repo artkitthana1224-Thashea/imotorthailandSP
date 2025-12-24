@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>I-MOTOR CENTRAL | Enterprise ERP</title>
-    <!-- Prevent ReferenceError: process is not defined -->
+    <!-- Critical: Shim process for libraries before they load -->
     <script>
       window.process = { env: { API_KEY: "" } };
     </script>
@@ -44,6 +44,16 @@
         #root {
           min-height: 100vh;
         }
+
+        /* Loading Screen Style */
+        .initial-loader {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background: #f8fafc;
+        }
     </style>
 <script type="importmap">
 {
@@ -62,7 +72,13 @@
 </script>
 </head>
 <body class="text-slate-900">
-    <div id="root"></div>
+    <div id="root">
+        <div class="initial-loader">
+            <div style="width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <p style="margin-top: 20px; font-weight: 800; font-size: 12px; letter-spacing: 0.2em; color: #64748b; text-transform: uppercase;">Initializing I-MOTOR System...</p>
+        </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     <script type="module" src="index.tsx"></script>
 </body>
 </html>
