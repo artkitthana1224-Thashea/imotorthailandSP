@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, Users, Bike, Package, Wrench, BarChart3, Settings, 
-  Search, Sun, Moon, Wallet, X, Menu
+  Search, Sun, Moon, Wallet, X, Menu, ClipboardList, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Company, UserRole } from '../types';
 
@@ -22,10 +22,13 @@ export const Layout: React.FC<LayoutProps> = ({
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileNavVisible, setIsMobileNavVisible] = useState(true);
+  const [isMobileNavCollapsed, setIsMobileNavCollapsed] = useState(false);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
     const handleScroll = () => {
+      if (isMobileNavCollapsed) return; // Don't auto-show if manually collapsed
+
       const currentScrollY = window.scrollY;
       if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
         setIsMobileNavVisible(false); // Scroll Down - Hide
@@ -36,7 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isMobileNavCollapsed]);
 
   const menuItems = [
     { id: 'dashboard', label: 'หน้าหลัก', icon: <LayoutDashboard size={20} />, color: 'text-blue-500' },
@@ -45,7 +48,7 @@ export const Layout: React.FC<LayoutProps> = ({
     { id: 'customers', label: 'ลูกค้า CRM', icon: <Users size={20} />, color: 'text-teal-500' },
     { id: 'vehicles', label: 'รถ EV', icon: <Bike size={20} />, color: 'text-rose-500' },
     { id: 'billing', label: 'การเงิน', icon: <Wallet size={20} />, color: 'text-sky-500' },
-    { id: 'reports', label: 'วิเคราะห์', icon: <BarChart3 size={20} />, color: 'text-purple-500' },
+    { id: 'reports', label: 'รายงาน', icon: <ClipboardList size={20} />, color: 'text-purple-600' },
     { id: 'settings', label: 'ตั้งค่า', icon: <Settings size={20} />, color: 'text-slate-500' },
   ];
 
@@ -54,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({
   return (
     <div className={`flex h-screen overflow-hidden ${isDarkMode ? 'dark bg-slate-950' : 'bg-slate-50'}`}>
       {/* Desktop Sidebar */}
-      <aside className={`hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ${isSidebarOpen ? 'w-72' : 'w-24'}`}>
+      <aside className={`hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 print:hidden ${isSidebarOpen ? 'w-72' : 'w-24'}`}>
         <div className="flex flex-col items-center justify-center h-40 border-b border-slate-50 dark:border-slate-800">
           <div className="w-16 h-16 rounded-2xl bg-white shadow-md flex items-center justify-center p-1 overflow-hidden">
              <img src={currentCompany.logo} alt="Logo" className="w-full h-full object-contain" />
@@ -76,7 +79,7 @@ export const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between z-10">
+        <header className="h-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between z-10 print:hidden">
           <div className="flex items-center gap-4">
              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-500 hidden md:block">
                <Menu size={20} />
@@ -96,31 +99,49 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-10 pb-32 md:pb-10 scrollbar-hide">
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 pb-32 md:pb-10 scrollbar-hide print:p-0 print:overflow-visible">
           {children}
         </main>
 
-        {/* Premium Mobile Navigation */}
-        <div className={`md:hidden fixed bottom-6 left-6 right-6 h-18 bg-blue-50/80 backdrop-blur-xl shadow-[0_20px_50px_-15px_rgba(37,99,235,0.3)] rounded-[32px] flex items-center justify-around px-2 z-50 border border-white/40 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isMobileNavVisible ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}>
-          {menuItems.slice(0, 5).map((item) => (
+        {/* Premium Mobile Navigation with Toggle Support */}
+        <div className={`md:hidden fixed bottom-6 left-6 right-6 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-50 print:hidden ${isMobileNavVisible && !isMobileNavCollapsed ? 'translate-y-0 opacity-100' : 'translate-y-40 opacity-0 pointer-events-none'}`}>
+          <div className="relative h-18 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-[0_20px_50px_-15px_rgba(0,0,0,0.2)] rounded-[32px] flex items-center justify-around px-2 border border-white/40">
+            {/* Toggle Switch */}
             <button 
-              key={item.id} 
-              onClick={() => setActiveTab(item.id)} 
-              className={`p-4 rounded-[24px] transition-all duration-300 relative ${activeTab === item.id ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70 hover:opacity-100'}`}
+              onClick={() => setIsMobileNavCollapsed(true)} 
+              className="absolute -top-12 left-1/2 -translate-x-1/2 w-10 h-10 bg-slate-900/10 backdrop-blur-md rounded-full flex items-center justify-center text-slate-400 border border-white/20 active:scale-95 transition-all pointer-events-auto"
             >
-              {item.icon}
-              {activeTab === item.id && (
-                <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
-              )}
+              <ChevronDown size={20} />
             </button>
-          ))}
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`p-4 rounded-[24px] transition-all duration-300 ${activeTab === 'settings' ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70'}`}
-          >
-            <Settings size={20} />
-          </button>
+
+            {menuItems.slice(0, 5).map((item) => (
+              <button 
+                key={item.id} 
+                onClick={() => setActiveTab(item.id)} 
+                className={`p-4 rounded-[24px] transition-all duration-300 relative ${activeTab === item.id ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70 hover:opacity-100'}`}
+              >
+                {item.icon}
+                {activeTab === item.id && (
+                  <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full"></span>
+                )}
+              </button>
+            ))}
+            <button 
+              onClick={() => setActiveTab('reports')}
+              className={`p-4 rounded-[24px] transition-all duration-300 ${activeTab === 'reports' ? 'text-blue-600 scale-110' : 'text-slate-400 opacity-70'}`}
+            >
+              <ClipboardList size={20} />
+            </button>
+          </div>
         </div>
+
+        {/* Floating Toggle Button (Visible when menu is collapsed) */}
+        <button 
+          onClick={() => { setIsMobileNavCollapsed(false); setIsMobileNavVisible(true); }}
+          className={`md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center z-[60] transition-all duration-500 ease-out border-4 border-white ${isMobileNavCollapsed || !isMobileNavVisible ? 'translate-y-0 scale-100' : 'translate-y-32 scale-0'}`}
+        >
+          <Menu size={24} />
+        </button>
       </div>
     </div>
   );

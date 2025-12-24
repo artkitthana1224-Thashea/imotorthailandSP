@@ -28,69 +28,52 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Start showing the layout immediately even before data finishes
+    setLoading(true);
     fetchAllData();
   }, []);
 
   const fetchAllData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    const timeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Request Timeout")), 15000)
-    );
-
     try {
-      const fetchPromise = Promise.all([
-        supabase.from('companies').select('*').limit(1),
-        supabase.from('vehicles').select('*'),
-        supabase.from('work_orders').select('*').order('created_at', { ascending: false }),
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('parts').select('*')
-      ]);
+      // 1. Fetch Company First (Critical for context)
+      const { data: compRes, error: compErr } = await supabase.from('companies').select('*').limit(1);
+      if (compErr) throw compErr;
+      if (compRes && compRes.length > 0) setCurrentCompany(compRes.data?.[0] || compRes[0]);
 
-      const [compRes, vRes, woRes, cRes, pRes] = await (Promise.race([fetchPromise, timeout]) as Promise<any[]>);
+      // 2. Fetch Other Data in parallel without blocking main render if one fails
+      const fetches = [
+        supabase.from('vehicles').select('*').then(res => res.data && setVehicles(res.data)),
+        supabase.from('customers').select('*').order('name').then(res => res.data && setCustomers(res.data)),
+        supabase.from('parts').select('*').then(res => res.data && setParts(res.data)),
+        supabase.from('work_orders').select('*').order('created_at', { ascending: false }).then(res => {
+          if (res.data) {
+            setWorkOrders(res.data.map((d: any) => ({
+              ...d,
+              orderNumber: d.order_number,
+              customer_id: d.customer_id,
+              vehicle_id: d.vehicle_id,
+              issue_description: d.issue_description,
+              labor_cost: d.labor_cost,
+              total_amount: d.total_amount,
+              created_at: d.created_at
+            })));
+          }
+        })
+      ];
 
-      const firstError = compRes.error || vRes.error || woRes.error || cRes.error || pRes.error;
-      
-      if (firstError) {
-        console.error("Database initialization error:", firstError.message || firstError);
-        const msg = firstError.message?.toLowerCase() || "";
-        if (msg.includes("does not exist") || msg.includes("relation") || msg.includes("not found")) {
-          setError("DATABASE_NOT_READY");
-        } else {
-          setError(firstError.message || "Unknown Connection Error");
-        }
-      }
-
-      // If we have a real company in the DB, use its ID to avoid Foreign Key errors
-      if (compRes.data && compRes.data.length > 0) {
-        setCurrentCompany(compRes.data[0]);
-      } else {
-        // Only error if we absolutely need a company to function
-        console.warn("No companies found in database. Foreign key errors may occur.");
-      }
-
-      if (vRes.data) setVehicles(vRes.data);
-      if (cRes.data) setCustomers(cRes.data);
-      if (pRes.data) setParts(pRes.data);
-      
-      if (woRes.data) {
-        setWorkOrders(woRes.data.map((d: any) => ({
-          ...d,
-          orderNumber: d.order_number,
-          customer_id: d.customer_id,
-          vehicle_id: d.vehicle_id,
-          issue_description: d.issue_description,
-          labor_cost: d.labor_cost,
-          total_amount: d.total_amount,
-          created_at: d.created_at
-        })));
-      }
+      // Wait for all non-critical fetches but catch errors gracefully
+      await Promise.allSettled(fetches);
+      setError(null);
     } catch (err: any) {
       console.error("Critical fetch error:", err);
-      setError(err.message || "Critical System Error");
+      const msg = err.message?.toLowerCase() || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        setError("DATABASE_NOT_READY");
+      } else {
+        setError(err.message || "Unable to connect to service database");
+      }
     } finally {
-      setTimeout(() => setLoading(false), 300);
+      setLoading(false);
     }
   };
 
@@ -140,7 +123,7 @@ const App: React.FC = () => {
            </div>
            <div>
               <h2 className="text-xl font-black uppercase italic tracking-tighter text-rose-600">Connection Error</h2>
-              <p className="text-slate-500 text-xs mt-2 max-w-sm font-mono bg-slate-100 p-4 rounded-xl">
+              <p className="text-slate-500 text-xs mt-2 max-w-sm font-mono bg-slate-100 p-4 rounded-xl overflow-x-auto">
                  {error}
               </p>
            </div>
@@ -158,6 +141,7 @@ const App: React.FC = () => {
       case 'customers': return <CustomerView customers={customers} setCustomers={setCustomers} currentCompany={currentCompany} />;
       case 'vehicles': return <VehicleView vehicles={vehicles} setVehicles={setVehicles} workOrders={workOrders} currentCompany={currentCompany} />;
       case 'billing': return <BillingView currentCompany={currentCompany} />;
+      case 'reports': return <ReportsView />;
       case 'settings': return <SettingsView currentUser={currentUser} setCurrentUser={setCurrentUser} currentCompany={currentCompany} setCurrentCompany={setCurrentCompany} />;
       default: return <Dashboard setActiveTab={setActiveTab} />;
     }
